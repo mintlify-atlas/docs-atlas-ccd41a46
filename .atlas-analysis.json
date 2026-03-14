@@ -1,0 +1,132 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "ACE-Step 1.5",
+  "projectDescription": "Open-source music generation model that runs locally with commercial-grade quality, supporting multi-platform hardware and LoRA fine-tuning.",
+  "theme": "aspen",
+  "primaryColor": "#7c7c7c",
+  "lightColor": "#b6b6b6",
+  "darkColor": "#111111",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/model-zoo",
+              "concepts/design-philosophy",
+              "concepts/gpu-compatibility"
+            ]
+          },
+          {
+            "group": "Usage Guides",
+            "pages": [
+              "guides/gradio-ui",
+              "guides/cli",
+              "guides/python-api",
+              "guides/rest-api",
+              "guides/studio-ui"
+            ]
+          },
+          {
+            "group": "Generation Features",
+            "pages": [
+              "features/text-to-music",
+              "features/cover-generation",
+              "features/audio-editing",
+              "features/multi-track",
+              "features/metadata-control"
+            ]
+          },
+          {
+            "group": "Training & Customization",
+            "pages": [
+              "training/lora-overview",
+              "training/dataset-preparation",
+              "training/training-workflow",
+              "training/advanced-training"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/performance-optimization",
+              "advanced/benchmarking",
+              "advanced/gpu-troubleshooting",
+              "advanced/platform-specific"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python API",
+            "pages": [
+              "api/generation-params",
+              "api/generation-config",
+              "api/generate-music",
+              "api/handler"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api/rest-overview",
+              "api/rest-authentication",
+              "api/rest-endpoints",
+              "api/rest-examples"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "api/cli-commands",
+              "api/cli-options"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Ultra-fast local music generation (under 2s on A100, under 10s on RTX 3090)",
+    "Hybrid LM+DiT architecture with Chain-of-Thought reasoning",
+    "Multi-platform support (CUDA, ROCm, Intel XPU, Apple MPS/MLX, CPU)",
+    "Commercial-grade quality between Suno v4.5 and v5",
+    "Flexible duration from 10 seconds to 10 minutes",
+    "Advanced editing: cover generation, repaint, multi-track, vocal-to-BGM",
+    "LoRA training from just 8 songs in 1 hour on RTX 3090",
+    "50+ language support for lyrics and vocals",
+    "REST API and Python SDK for integration",
+    "Gradio UI, CLI, and Studio DAW-like interface"
+  ],
+  "publicApiSurface": [
+    "acestep (CLI entry point)",
+    "acestep-api (REST API server)",
+    "acestep-download (model downloader)",
+    "GenerationParams (parameter configuration dataclass)",
+    "GenerationConfig (generation settings)",
+    "generate_music() (main generation function)",
+    "AceStepHandler (model handler)",
+    "LLMHandler (5Hz LM handler)",
+    "POST /release_task (create generation task)",
+    "POST /query_result (query task status)",
+    "POST /format_input (LLM text formatting)",
+    "POST /create_random_sample (LLM random generation)",
+    "GET /v1/models (list models)",
+    "GET /v1/audio (download audio)",
+    "train.py (LoRA training script)"
+  ]
+}
