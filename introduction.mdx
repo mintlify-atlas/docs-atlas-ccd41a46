@@ -1,0 +1,144 @@
+---
+title: Introduction
+description: Welcome to ACE-Step 1.5 - the most powerful open-source local music generation model
+---
+
+<div style={{
+  background: 'linear-gradient(135deg, #2E37D9 0%, #7c7c7c 100%)',
+  padding: '3rem 2rem',
+  borderRadius: '8px',
+  marginBottom: '2rem',
+  color: '#FFFFFF'
+}}>
+  <h1 style={{
+    fontSize: '48px',
+    fontWeight: '700',
+    marginBottom: '1rem',
+    color: '#FFFFFF'
+  }}>ACE-Step 1.5</h1>
+  <p style={{
+    fontSize: '18px',
+    marginBottom: '0',
+    color: '#FFFFFF',
+    opacity: 0.95
+  }}>
+    Open-source music generation model that runs locally with commercial-grade quality, supporting multi-platform hardware and LoRA fine-tuning.
+  </p>
+</div>
+
+## What is ACE-Step 1.5?
+
+ACE-Step 1.5 is a highly efficient open-source music foundation model that brings commercial-grade generation to consumer hardware. It achieves quality beyond most commercial music models while remaining extremely fast—under 2 seconds per full song on an A100 and under 10 seconds on an RTX 3090.
+
+The model runs locally with less than 4GB of VRAM and supports lightweight personalization: you can train a LoRA from just a few songs to capture your own style.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Ultra-Fast Generation" icon="bolt">
+    Generate full songs in under 2s on A100, under 10s on RTX 3090. Production-ready speed for rapid iteration.
+  </Card>
+  <Card title="Commercial-Grade Quality" icon="star">
+    Quality between Suno v4.5 and v5. Rich style support with 1000+ instruments and fine-grained timbre control.
+  </Card>
+  <Card title="Multi-Platform Support" icon="microchip">
+    Runs on CUDA, ROCm, Intel XPU, Apple MPS/MLX, and CPU. Optimized for all major GPU vendors.
+  </Card>
+  <Card title="Hybrid Architecture" icon="brain">
+    Novel LM+DiT architecture where Language Model acts as planner, synthesizing metadata and lyrics via Chain-of-Thought.
+  </Card>
+  <Card title="Advanced Editing" icon="wand-magic-sparkles">
+    Cover generation, repaint, multi-track layering, vocal-to-BGM conversion, and selective audio editing.
+  </Card>
+  <Card title="LoRA Fine-Tuning" icon="graduation-cap">
+    Train custom LoRAs from just 8 songs in 1 hour on RTX 3090 (12GB VRAM). Capture your unique style.
+  </Card>
+</CardGroup>
+
+## Performance Highlights
+
+- **Ultra-fast**: 0.5s to 10s on A100 depending on think mode and diffusion steps
+- **Flexible duration**: Generate from 10 seconds to 10 minutes (600s)
+- **Batch generation**: Generate up to 8 songs simultaneously
+- **Efficient**: Runs with less than 4GB VRAM using INT8 quantization and CPU offload
+- **Multi-language**: Supports 50+ languages for lyrics and vocals
+
+## Architecture
+
+At its core lies a novel hybrid architecture where the Language Model (LM) functions as an omni-capable planner:
+
+- **Language Model**: Transforms simple user queries into comprehensive song blueprints, scaling from short loops to 10-minute compositions
+- **Diffusion Transformer (DiT)**: Generates high-quality audio guided by LM outputs
+- **Chain-of-Thought Reasoning**: LM synthesizes metadata, lyrics, and captions to guide the DiT
+- **Intrinsic Reinforcement Learning**: Alignment achieved through internal mechanisms, eliminating biases from external reward models
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Music Production" icon="music">
+    Create original music across diverse genres for creative production, from ambient soundscapes to full songs with lyrics.
+  </Card>
+  <Card title="Content Creation" icon="video">
+    Generate background music, covers, and multi-track compositions for videos, podcasts, and social media.
+  </Card>
+  <Card title="Style Transfer" icon="palette">
+    Use reference audio to guide generation style, create covers, or extract specific tracks from existing audio.
+  </Card>
+  <Card title="Research & Education" icon="flask">
+    Explore AI music generation, fine-tune models, and understand state-of-the-art diffusion architectures.
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Complete installation guide for all platforms
+  </Card>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Integrate ACE-Step into your projects
+  </Card>
+</CardGroup>
+
+## Design Philosophy
+
+ACE-Step 1.5 is designed for **human-centered generation**, not one-click automation. It's a creative tool for rapid iteration and artistic exploration:
+
+- **Ownership**: Forever own the model and your creations—no platform lock-in
+- **Speed**: Fast enough to support smooth human-machine dialogue rhythm
+- **Flexibility**: From simple mode to advanced parameter control
+- **Transparency**: Full control over model selection, quantization, and offloading
+
+Unlike closed-source platforms, ACE-Step gives you complete control over the generation process. You can fine-tune it to your taste, run it offline, and build your own creative workflows.
+
+## Next Steps
+
+<Steps>
+  <Step title="Install ACE-Step">
+    Follow the [installation guide](/installation) to set up ACE-Step on your platform.
+  </Step>
+  <Step title="Run Your First Generation">
+    Try the [quickstart guide](/quickstart) to generate your first song.
+  </Step>
+  <Step title="Explore Features">
+    Learn about [text-to-music](/features/text-to-music), [cover generation](/features/cover-generation), and [audio editing](/features/audio-editing).
+  </Step>
+  <Step title="Fine-Tune Your Model">
+    Train a [LoRA adapter](/training/lora-overview) to capture your unique style.
+  </Step>
+</Steps>
+
+## Community & Support
+
+- **GitHub**: [ace-step/ACE-Step-1.5](https://github.com/ace-step/ACE-Step-1.5)
+- **Discord**: [Join our Discord](https://discord.gg/PeWDxrkdj7)
+- **Hugging Face**: [ACE-Step on Hugging Face](https://huggingface.co/ACE-Step/Ace-Step1.5)
+- **Project Page**: [ACE-Step Project](https://ace-step.github.io/ace-step-v1.5.github.io/)
+- **Technical Report**: [arXiv Paper](https://arxiv.org/abs/2602.00744)
+
+<Note>
+ACE-Step 1.5 enables original music generation across diverse genres. We encourage users to verify originality, disclose AI involvement, and respect artistic integrity and legal compliance. See our [LICENSE](https://github.com/ace-step/ACE-Step-1.5/blob/main/LICENSE) for details.
+</Note>

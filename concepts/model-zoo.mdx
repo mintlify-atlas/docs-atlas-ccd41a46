@@ -1,0 +1,444 @@
+---
+title: 'Model Zoo'
+description: 'Complete guide to ACE-Step 1.5 model variants and selection strategy'
+---
+
+<img src="/assets/model_zoo.png" alt="ACE-Step Model Zoo" />
+
+## Overview
+
+ACE-Step 1.5 provides a comprehensive model zoo with two distinct model families:
+
+- **DiT Models**: Diffusion Transformer audio generators (4 variants)
+- **LM Models**: 5Hz Language Model planners (3 sizes)
+
+Each model is trained through multiple stages to achieve optimal performance for specific use cases.
+
+## Training Stages
+
+All models progress through up to three training stages:
+
+<Steps>
+  <Step title="Pre-Training">
+    Foundation training on large-scale music data to learn general audio generation capabilities and musical knowledge.
+  </Step>
+  
+  <Step title="Supervised Fine-Tuning (SFT)">
+    Alignment training to improve prompt following, coherence, and quality based on human preferences.
+  </Step>
+  
+  <Step title="Reinforcement Learning (RL)">
+    Advanced optimization using intrinsic RL (no external reward model bias) to further refine generation quality and diversity balance.
+  </Step>
+</Steps>
+
+## DiT Models
+
+Diffusion Transformer models are the audio generation engines. Choose based on your speed, quality, and feature requirements.
+
+### Model Comparison Table
+
+| DiT Model | Pre-Training | SFT | RL | CFG | Steps | Quality | Diversity | Fine-Tunability |
+|-----------|:------------:|:---:|:--:|:---:|:-----:|:-------:|:---------:|:---------------:|
+| `acestep-v15-base` | ✅ | ❌ | ❌ | ✅ | 50 | Medium | High | Easy |
+| `acestep-v15-sft` | ✅ | ✅ | ❌ | ✅ | 50 | High | Medium | Easy |
+| `acestep-v15-turbo` | ✅ | ✅ | ❌ | ❌ | 8 | Very High | Medium | Medium |
+| `acestep-v15-turbo-rl` | ✅ | ✅ | ✅ | ❌ | 8 | Very High | Medium | Medium |
+
+### Supported Tasks by Model
+
+| Task | Base | SFT | Turbo | Description |
+|------|:----:|:---:|:-----:|-------------|
+| **Text2Music** | ✅ | ✅ | ✅ | Generate music from text descriptions |
+| **Cover** | ✅ | ✅ | ✅ | Reinterpret existing audio with new style |
+| **Repaint** | ✅ | ✅ | ✅ | Local audio editing and modification |
+| **Reference Audio** | ✅ | ✅ | ✅ | Style/timbre guidance from reference |
+| **Extract** | ✅ | ❌ | ❌ | Separate tracks from mixed audio |
+| **Lego** | ✅ | ❌ | ❌ | Add new tracks to existing audio |
+| **Complete** | ✅ | ❌ | ❌ | Add accompaniment to single track |
+
+### acestep-v15-base
+
+**The foundation model and master of all tasks.**
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="check">
+    - Master of ALL task types
+    - Exclusive multi-track capabilities
+    - Highest diversity output
+    - Strongest fine-tuning plasticity
+    - Best for LoRA training foundation
+  </Card>
+  
+  <Card title="Trade-offs" icon="info">
+    - Medium quality (pre-trained only)
+    - Requires 50 diffusion steps
+    - Slower inference than Turbo
+    - Needs CFG tuning for best results
+  </Card>
+</CardGroup>
+
+**Exclusive Tasks:**
+
+<Accordion title="Extract - Track Separation">
+  Separate individual stems from mixed audio:
+  - Isolate vocals from instrumental tracks
+  - Extract specific instruments
+  - Clean up recordings by removing unwanted elements
+  
+  **Use case**: Remixing, sampling, analysis, acapella extraction
+</Accordion>
+
+<Accordion title="Lego - Multi-Track Layering">
+  Intelligently add new tracks to existing audio:
+  - Add drums to a guitar track
+  - Layer bass under vocals
+  - Build arrangements progressively
+  
+  **Use case**: Arrangement building, progressive composition, adding missing elements
+</Accordion>
+
+<Accordion title="Complete - Accompaniment Generation">
+  Generate full mixed accompaniment for single tracks:
+  - Add complete backing to acapella vocals
+  - Generate arrangement from melody
+  - Auto-accompaniment generation
+  
+  **Use case**: Quick backing track creation, songwriting assistance, demo production
+</Accordion>
+
+<Note>
+  **Recommended for**: Large-scale fine-tuning projects, multi-track production workflows, maximum creative flexibility, LoRA training foundation
+</Note>
+
+### acestep-v15-sft
+
+**Supervised fine-tuned model optimized for quality and control.**
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="check">
+    - High quality output (SFT trained)
+    - Supports CFG for adherence control
+    - Better semantic understanding
+    - Richer detail expression
+    - Good prompt following
+  </Card>
+  
+  <Card title="Trade-offs" icon="info">
+    - 50 steps required
+    - Slower than Turbo
+    - Medium diversity
+    - More error accumulation vs Turbo
+  </Card>
+</CardGroup>
+
+**When to Use:**
+
+- You don't care about inference time
+- You enjoy tuning CFG and step parameters
+- You prefer rich detail over maximum crispness
+- You need fine control over prompt adherence
+
+<Warning>
+  The additional steps (50 vs 8) provide more "thinking time" but also introduce more cumulative error, resulting in slightly less audio crispness compared to Turbo.
+</Warning>
+
+### acestep-v15-turbo
+
+**The default recommendation - optimal speed/quality balance.**
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="check">
+    - **Very high quality** (SFT + distillation)
+    - **Ultra-fast**: Only 8 steps needed
+    - Crisp, clean audio output
+    - Best creativity/semantics balance
+    - Thoroughly tested and reliable
+    - No CFG overhead
+  </Card>
+  
+  <Card title="Trade-offs" icon="info">
+    - No CFG support (distilled)
+    - Medium diversity
+    - Medium fine-tuning difficulty
+    - Fixed at 8 steps
+  </Card>
+</CardGroup>
+
+**Shift Variants:**
+
+Turbo is available in multiple shift configurations:
+
+| Variant | Distillation Config | Characteristics |
+|---------|---------------------|------------------|
+| `turbo` (default) | Joint shift 1, 2, 3 | **Best overall balance** - thoroughly tested |
+| `turbo-shift1` | shift=1 only | Richer details, weaker semantics |
+| `turbo-shift3` | shift=3 only | Clearer timbre, stronger semantics, may sound "dry" |
+| `turbo-continuous` | Continuous shift 1-5 | Experimental, maximum flexibility |
+
+<Note>
+  **Start with default turbo** - it provides the best proven balance. Explore shift variants if you have specific stylistic preferences after gaining experience.
+</Note>
+
+### acestep-v15-turbo-rl
+
+**Advanced model with reinforcement learning optimization.**
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="check">
+    - Very high quality (SFT + RL)
+    - Intrinsic RL (no external reward bias)
+    - Improved quality/diversity balance
+    - Same 8-step speed as Turbo
+    - Latest research advances
+  </Card>
+  
+  <Card title="Trade-offs" icon="info">
+    - To be released (coming soon)
+    - Medium fine-tuning difficulty
+    - No CFG support
+  </Card>
+</CardGroup>
+
+## LM Models
+
+Language Model planners that transform user intent into structured musical blueprints.
+
+### Model Comparison Table
+
+| LM Model | Base Model | Parameters | CoT Metas | Query Rewrite | Audio Understanding | Composition | Melody Copy |
+|----------|------------|------------|:---------:|:-------------:|:-------------------:|:-----------:|:-----------:|
+| `acestep-5Hz-lm-0.6B` | Qwen3-0.6B | 600M | ✅ | ✅ | Medium | Medium | Weak |
+| `acestep-5Hz-lm-1.7B` | Qwen3-1.7B | 1.7B | ✅ | ✅ | Medium | Medium | Medium |
+| `acestep-5Hz-lm-4B` | Qwen3-4B | 4B | ✅ | ✅ | Strong | Strong | Strong |
+
+All models are pre-trained from Qwen3 base models and trained with identical data. The **only difference is knowledge capacity**.
+
+### Capability Details
+
+#### Chain-of-Thought Metadata (CoT Metas)
+
+All LM models can automatically infer:
+- BPM (tempo)
+- Key/scale
+- Time signature
+- Duration
+- Vocal language
+
+#### Query Rewriting
+
+Expands and optimizes user captions:
+```
+Input:  "sad piano song"
+Output: "Melancholic piano ballad, intimate atmosphere, gentle dynamics,
+         emotional female vocal with breathy delivery, slow tempo"
+```
+
+#### Audio Understanding
+
+| Model Size | BPM Detection | Key Detection | Captioning | Melody Memory |
+|------------|:-------------:|:-------------:|:----------:|:-------------:|
+| 0.6B | ✅ | ✅ | Medium | Weak |
+| 1.7B | ✅ | ✅ | Medium | Medium |
+| 4B | ✅ | ✅ | Strong | Strong |
+
+### Choosing Your LM Model
+
+<CardGroup cols={3}>
+  <Card title="0.6B - Lightweight" icon="feather">
+    **VRAM**: 6-8GB
+    
+    **Speed**: ⚡⚡⚡
+    
+    **Best for**: Low-VRAM systems, rapid prototyping, simple prompts
+    
+    **Limitation**: Weaker on complex compositions and melody copying
+  </Card>
+  
+  <Card title="1.7B - Balanced (Default)" icon="balance-scale">
+    **VRAM**: 8-16GB
+    
+    **Speed**: ⚡⚡
+    
+    **Best for**: General use, most scenarios, good all-around performance
+    
+    **Sweet spot**: Excellent balance of capability and resource usage
+  </Card>
+  
+  <Card title="4B - Maximum Quality" icon="crown">
+    **VRAM**: ≥24GB
+    
+    **Speed**: ⚡
+    
+    **Best for**: Complex compositions, high-quality generation, melody preservation
+    
+    **Advantage**: Richest world knowledge and strongest memory
+  </Card>
+</CardGroup>
+
+## VRAM-Based Selection Guide
+
+### ≤4GB VRAM (Tier 1)
+
+**Configuration**: DiT-only mode
+- No LM (thinking mode disabled)
+- INT8 quantization mandatory
+- Full CPU offload enabled
+- Max duration: 4-6 minutes
+
+**Use case**: Minimal systems, CPU-heavy workflows
+
+### 6-8GB VRAM (Tier 3)
+
+**Configuration**: `turbo` + `0.6B` LM
+- PyTorch backend (`pt`)
+- INT8 quantization + CPU offload
+- Max duration: 8-10 minutes
+- Batch size: 2
+
+**Use case**: Entry-level GPUs (GTX 1660, RTX 3050)
+
+### 8-16GB VRAM (Tier 4-5)
+
+**Configuration**: `turbo` + `1.7B` LM (default)
+- vLLM backend for efficiency
+- INT8 quantization + CPU offload
+- Max duration: 8-10 minutes
+- Batch size: 2-4
+
+**Use case**: Mid-range GPUs (RTX 3060, RTX 4060)
+
+### 16-24GB VRAM (Tier 6a)
+
+**Configuration**: `turbo` + `1.7B` or `4B` LM
+- vLLM backend
+- Optional quantization
+- Max duration: 8-10 minutes
+- Batch size: 4-8
+
+**Use case**: High-end consumer GPUs (RTX 3080, RTX 4070 Ti)
+
+### ≥24GB VRAM (Unlimited)
+
+**Configuration**: Any DiT + `4B` LM
+- vLLM backend
+- No quantization or offload needed
+- Max duration: 10 minutes
+- Batch size: 8
+
+**Use case**: Professional GPUs (RTX 3090, RTX 4090, A100)
+
+<Note>
+  The UI automatically selects the best configuration for your GPU. All settings are tier-aware and pre-configured for optimal performance.
+</Note>
+
+## Model Combinations
+
+### Speed-Optimized
+
+```
+DiT:  turbo (8 steps)
+LM:   None or 0.6B
+Use:  Rapid iteration, experimentation, high-volume generation
+```
+
+### Balanced (Default)
+
+```
+DiT:  turbo (8 steps)
+LM:   1.7B
+Use:  Daily creative work, general music production
+```
+
+### Quality-Optimized
+
+```
+DiT:  sft (50 steps) or turbo-rl
+LM:   1.7B or 4B
+Use:  Final production, detailed control, complex compositions
+```
+
+### Multi-Track Specialist
+
+```
+DiT:  base (50 steps)
+LM:   1.7B or 4B
+Use:  Track separation, layering, accompaniment generation
+```
+
+### Fine-Tuning Foundation
+
+```
+DiT:  base (highest plasticity)
+LM:   Any (independent of DiT training)
+Use:  LoRA training, custom model development
+```
+
+## Custom Models: LoRA Fine-Tuning
+
+Beyond official models, create your own custom variants with LoRA:
+
+<Steps>
+  <Step title="Collect Training Data">
+    Gather 8-20 songs representing your target style or aesthetic
+  </Step>
+  
+  <Step title="Annotate & Preprocess">
+    Use Gradio UI's one-click annotation or manual captioning
+  </Step>
+  
+  <Step title="Train LoRA">
+    Train for ~1 hour on RTX 3090 (12GB VRAM sufficient)
+  </Step>
+  
+  <Step title="Load Custom Model">
+    Apply your LoRA to any base DiT model
+  </Step>
+</Steps>
+
+**What Custom Models Enable:**
+
+- Capture specific timbre styles
+- Emphasize underrepresented genres
+- Train on your own musical aesthetic
+- Create artist-specific style models
+- Personalize the model's creative tendencies
+
+<Card title="Example: Happy New Year LoRA" icon="gift">
+  Trained on 20+ festive songs, specialized for expressing celebration and holiday atmosphere. Demonstrates how focused data can reshape model capabilities.
+</Card>
+
+## Downloading Models
+
+```bash
+# Download default models (turbo + 1.7B LM)
+uv run acestep-download
+
+# Download all models
+uv run acestep-download --all
+
+# Download specific DiT model
+uv run acestep-download --model acestep-v15-base
+uv run acestep-download --model acestep-v15-sft
+uv run acestep-download --model acestep-v15-turbo
+
+# Download specific LM model
+uv run acestep-download --model acestep-5Hz-lm-0.6B
+uv run acestep-download --model acestep-5Hz-lm-1.7B
+uv run acestep-download --model acestep-5Hz-lm-4B
+
+# List available models
+uv run acestep-download --list
+```
+
+Models are downloaded to the `checkpoints/` folder for easy organization.
+
+## Summary
+
+**For most users**: Start with `turbo` + `1.7B` LM - the thoroughly tested, balanced default.
+
+**For experimentation**: Try different DiT shift variants and LM sizes to find your preferred creative voice.
+
+**For production**: Consider `sft` or `turbo-rl` with `4B` LM for maximum quality.
+
+**For advanced workflows**: Use `base` model to unlock multi-track capabilities and fine-tuning potential.

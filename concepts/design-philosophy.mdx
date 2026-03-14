@@ -1,0 +1,319 @@
+---
+title: 'Design Philosophy'
+description: 'Understanding the human-centered approach and core principles behind ACE-Step 1.5'
+---
+
+## Mental Models
+
+Before diving into ACE-Step 1.5, understanding the correct mental model is crucial for setting proper expectations and getting the most from the system.
+
+### Human-Centered Generation
+
+ACE-Step 1.5 is designed for **human-centered generation**, not **one-click generation**.
+
+Understanding this distinction fundamentally changes how you approach AI music creation.
+
+<CardGroup cols={2}>
+  <Card title="One-Click Generation" icon="magic-wand-sparkles">
+    **Client-Vendor Relationship**
+    
+    - Input prompt, click generate, pick result
+    - AI is a service delivering to spec
+    - Clear purpose, defined expectations
+    - Same input → similar output
+    - Limited ownership and control
+    - Finite game: ends at delivery
+  </Card>
+  
+  <Card title="Human-Centered Generation" icon="hands-holding">
+    **Creative Collaboration**
+    
+    - Iterative exploration and refinement
+    - AI is an inspirer and co-creator
+    - Playful discovery process
+    - Same input → diverse possibilities
+    - Full ownership and customization
+    - Infinite game: process never ends
+  </Card>
+</CardGroup>
+
+### The Collaborative Workflow
+
+Human-centered generation follows an iterative creative cycle:
+
+<Steps>
+  <Step title="Seed Inspiration">
+    Throw out some initial creative seeds - a mood, style, or rough idea
+  </Step>
+  
+  <Step title="Explore Results">
+    Generate several variations and listen for interesting directions
+  </Step>
+  
+  <Step title="Iterate & Refine">
+    Choose promising directions and continue developing:
+    - Adjust prompts to regenerate
+    - Use **Cover** to maintain structure while changing details
+    - Use **Repaint** for local modifications
+    - Use **Add Layer** to build arrangements progressively
+  </Step>
+  
+  <Step title="Discover & Polish">
+    Repeat until you discover something that resonates, then polish to completion
+  </Step>
+</Steps>
+
+At this stage, AI is not a servant executing commands, but an **inspirer** helping you discover creative possibilities you might not have imagined.
+
+## The Elephant Rider Metaphor
+
+AI music generation is like the famous **elephant rider metaphor** from psychology.
+
+### You Ride the Elephant
+
+Consciousness rides on the subconscious, humans ride on elephants. You can give directions, but you can't make the elephant precisely and instantly execute every command. It has its own:
+
+- **Inertia** - trained patterns and tendencies
+- **Temperament** - preferences shaped by training data
+- **Will** - inherent creative directions
+
+This elephant is the music generation model.
+
+### The Iceberg Model
+
+Between audio and semantics lies a hidden iceberg:
+
+<Note>
+  What we can describe with language - style, instruments, timbre, emotion, scenes, progression, lyrics, vocal style - these are the **tiny tip above water**.
+  
+  The vast majority of what defines audio remains **beneath the surface**, inaccessible to text description.
+</Note>
+
+The most precise control would be: input the expected audio, receive it back unchanged.
+
+But as long as you're using text descriptions, references, or prompts - **the model will have room to interpret**. This isn't a bug, it's the fundamental nature of the medium.
+
+### What Shapes the Elephant?
+
+The model is a fusion of countless elements:
+
+- Data distribution
+- Model scale and architecture  
+- Algorithm design
+- Annotation bias
+- Evaluation bias
+
+It's an **abstract crystallization of human music history and engineering trade-offs**.
+
+### The Taste Problem
+
+Even if we achieve technical "perfection," there's a fundamental challenge we can't avoid: **taste**.
+
+Taste varies from person to person. If a music generation model tries to please all listeners, its output will tend toward the popular average of human music history - **this will be extremely mediocre**.
+
+<Warning>
+  When you find the model's output "not to your taste," this might not be the model's problem - **your taste may lie outside the average**. This is actually a good thing.
+  
+  It means: **You need to learn to guide this elephant, not expect it to automatically understand you.**
+</Warning>
+
+## Core Design Principles
+
+For human-centered generation to truly work, several key conditions must be met:
+
+### 1. Ownership Through Open Source
+
+**The model must be open-source, locally runnable, and trainable.**
+
+This isn't technical purism - it's about **fundamental creative ownership**.
+
+<Accordion title="Why Local Ownership Matters">
+  When you use closed-source platforms:
+  - You don't own the model
+  - Your works are bound by platform agreements
+  - Version updates happen without your control
+  - Terms can change unilaterally
+  - Service can shut down anytime
+  - No fine-tuning or customization possible
+  
+  When the model is open-source and locally runnable:
+  - **You forever own this model**
+  - **You forever own all creations made with it**
+  - No third-party agreement hassles
+  - No platform risks
+  - Fine-tune and modify freely
+  - Build your own creative system
+  
+  It's like buying an instrument - **you can use it anytime, anywhere, and adjust it however you want**.
+</Accordion>
+
+### 2. Speed Preserves Flow State
+
+**The model must be fast.**
+
+Human time is precious, but more importantly - **slow generation breaks flow state**.
+
+<Card title="The Flow State Problem" icon="water">
+  The core of human-centered workflow is the rapid cycle of "try, listen, adjust."
+  
+  If each generation takes minutes:
+  - Your inspiration dissipates while waiting
+  - The "play" experience degrades into a "wait" ordeal
+  - Creative momentum is lost
+  - Exploration becomes tedious
+  
+  **ACE-Step 1.5 is specifically optimized for this**: While ensuring quality, generation is fast enough to support a smooth human-machine dialogue rhythm.
+</Card>
+
+**Performance Targets:**
+
+- **A100**: Under 2 seconds per full song
+- **RTX 3090**: Under 10 seconds per full song  
+- **Range**: 0.5-10 seconds depending on mode and steps
+
+This speed enables true creative iteration without breaking concentration.
+
+### 3. Finite Game vs Infinite Game
+
+One-click generation is a **finite game** - clear goals, result-oriented, ends at the finish line. To some extent, it coldly industrializes music creation, replacing human roles.
+
+Human-centered generation is an **infinite game** - because the fun lies in the process, and **the process never ends**.
+
+<Note>
+  Our vision is to **democratize AI music generation**. Let ACE-Step become a creative instrument in your pocket, let music return to **Play** itself - the creative "play," not just clicking play.
+</Note>
+
+## Accepting Uncertainty
+
+### Randomness as a Feature
+
+Randomness is a double-edged sword in generative models:
+
+**Benefits:**
+- **Explore creative space** - same input produces different variants
+- **Discover unexpected surprises** - randomness brings results you didn't expect
+- **Avoid repetition** - each generation is unique
+
+**Challenges:**
+- **Uncontrollable results** - can't precisely predict outcomes
+- **Hard to reproduce** - difficult to recreate a specific good result
+- **Tuning difficulty** - hard to isolate parameter effects from random variation
+- **Screening cost** - need multiple generations to find satisfactory ones
+
+### The Right Mindset
+
+<Steps>
+  <Step title="Accept Uncertainty">
+    Randomness is an essential characteristic of AI music generation - not a bug, but a feature. Don't expect every generation to be perfect.
+  </Step>
+  
+  <Step title="Embrace Exploration">
+    Treat generation as "treasure hunting" - try multiple times, discover surprises. Enjoy the unexpected rather than obsessing over one-time success.
+  </Step>
+  
+  <Step title="Use Fixed Seeds Wisely">
+    - Want to understand parameter effects? **Fix seed** to eliminate randomness
+    - Want to explore creative space? **Let seed vary** randomly
+  </Step>
+  
+  <Step title="Batch Generation + Smart Screening">
+    Don't rely on single generations - batch generate and use automatic scoring for efficient screening.
+  </Step>
+</Steps>
+
+### Large Batch + AutoGen Solution
+
+Because inference is extremely fast, you can explore random space efficiently:
+
+<Accordion title="Batch Generation Strategy">
+  **Set larger batch_size** (2, 4, 8) to generate multiple versions simultaneously
+  
+  **Enable AutoGen** to continuously generate new batches in background while you review:
+  - Automatically uses same parameters with new random seeds
+  - Ensures result diversity
+  - Lets you "generate while listening"
+  - Next batch ready when you finish reviewing current results
+</Accordion>
+
+<Accordion title="Automatic Scoring">
+  **DiT Lyrics Alignment Score** - evaluates alignment between lyrics and audio:
+  - Higher score = more accurate lyric positioning
+  - Better singing-lyrics match
+  - Particularly valuable for lyrical music
+  
+  **Other Quality Metrics** - assess generation from multiple dimensions
+  
+  Use scores for initial screening, then manually select the best version for your needs.
+</Accordion>
+
+## Practical Philosophy
+
+### Start Simple, Iterate Complex
+
+Don't aim for perfection on the first try:
+
+1. **Start with a rough direction** - simple prompt, basic idea
+2. **Generate variations** - explore what the model produces
+3. **Find interesting threads** - identify promising directions
+4. **Refine progressively** - use Cover, Repaint, Add Layer to develop
+5. **Polish to completion** - final touches when you've found the right path
+
+### Learn to Guide, Not Command
+
+Think of prompting as **suggesting direction** rather than issuing precise instructions:
+
+- The model interprets your intent through its training
+- Prompts anchor tendencies, they don't dictate exact output
+- Work with the model's capabilities, not against them
+- Discover what it does well and lean into those strengths
+
+### Embrace the Collaborative Process
+
+<Card title="You Are Co-Creators" icon="people-group">
+  The best results come from **collaboration between human creativity and AI capability**:
+  
+  - You provide vision, taste, judgment, and curation
+  - AI provides execution, variation, and inspiration
+  - Together you explore creative spaces neither could access alone
+  
+  This is not automation replacing creativity - **it's augmentation expanding creative possibility**.
+</Card>
+
+## Why Open Source Matters
+
+Beyond technical benefits, open source aligns with human-centered values:
+
+### Transparency
+
+You can inspect how the model works, understand its biases and limitations, and make informed creative decisions.
+
+### Longevity  
+
+Your creative tools and workflows won't disappear when a company changes direction or shuts down.
+
+### Community
+
+Collective improvement through shared knowledge, custom models, training techniques, and creative workflows.
+
+### Evolution
+
+Fine-tune models to your aesthetic, train LoRAs on specific styles, build specialized variants - **shape the tool to fit your creative vision**.
+
+## The Infinite Game
+
+ACE-Step 1.5 is designed as a **creative instrument**, not a content factory:
+
+- **Play** with musical ideas
+- **Explore** creative directions
+- **Discover** unexpected possibilities
+- **Develop** your unique sound
+- **Own** your tools and creations
+- **Share** in a community of creators
+
+The goal isn't to press a button and receive a product.
+
+The goal is to **engage in an infinite creative process** where AI becomes a genuine collaborator in your musical journey.
+
+---
+
+*This is just the beginning. The process never ends.*

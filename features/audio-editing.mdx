@@ -1,0 +1,415 @@
+---
+title: Audio Editing
+description: Selective editing, regeneration, and completion with Repaint, Complete, and Extract tasks
+---
+
+## Overview
+
+ACE-Step 1.5 offers powerful audio editing capabilities that let you modify specific sections of audio, complete partial tracks, and separate stems. These features enable iterative refinement and precise control over your generated music.
+
+## Repaint: Local Audio Editing
+
+Repaint allows you to **regenerate a specific time segment** of audio while keeping the rest unchanged. It's like using an eraser and redrawing that section.
+
+<Note>
+Repaint is available in **all model variants**: turbo, SFT, and base.
+</Note>
+
+### How Repaint Works
+
+<Steps>
+  <Step title="Define Region">
+    Specify the time interval to repaint using `repainting_start` and `repainting_end` (in seconds)
+  </Step>
+  
+  <Step title="Context Awareness">
+    The model analyzes audio context before and after the region:
+    - Timbre characteristics
+    - Mixing and production style
+    - Harmonic and rhythmic context
+  </Step>
+  
+  <Step title="Regenerate Section">
+    DiT generates new audio for the specified region that:
+    - Follows your caption/lyrics instructions
+    - Blends naturally with surrounding audio
+    - Maintains production consistency
+  </Step>
+</Steps>
+
+### Repaint Parameters
+
+```python
+from acestep.inference import GenerationParams
+
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="original.mp3",
+    repainting_start=10.0,  # Start at 10 seconds
+    repainting_end=20.0,    # End at 20 seconds (-1 for end of file)
+    caption="smooth piano solo with gentle melody",
+    lyrics="[Piano Solo - expressive]",  # Optional structure tag
+)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `src_audio` | str | Path to source audio file (required) |
+| `repainting_start` | float | Start time in seconds (0.0 = beginning) |
+| `repainting_end` | float | End time in seconds (-1 = end of file) |
+| `caption` | str | Description of desired content for repainted section |
+| `lyrics` | str | Optional lyrics/structure for the section |
+
+### Repaint Use Cases
+
+<AccordionGroup>
+  <Accordion title="Fix Problem Sections">
+    Regenerate parts that didn't turn out well:
+    
+    ```python
+    params = GenerationParams(
+        task_type="repaint",
+        src_audio="generated_song.mp3",
+        repainting_start=45.0,
+        repainting_end=60.0,
+        caption="cleaner vocal performance, less distortion",
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Add Variations">
+    Create different interpretations of specific sections:
+    
+    ```python
+    params = GenerationParams(
+        task_type="repaint",
+        src_audio="song.mp3",
+        repainting_start=60.0,
+        repainting_end=90.0,
+        caption="guitar solo instead of synth, bluesy feel",
+        lyrics="[Guitar Solo - expressive bends]",
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Change Lyrics in Section">
+    Maintain melody and orchestration, only change lyrics:
+    
+    ```python
+    params = GenerationParams(
+        task_type="repaint",
+        src_audio="vocal_track.mp3",
+        repainting_start=20.0,
+        repainting_end=35.0,
+        caption="same style and melody",
+        lyrics="""[Verse 2]
+新的歌词内容
+保持旋律不变""",
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Extend/Continue Audio">
+    Continue from the end of existing audio:
+    
+    ```python
+    params = GenerationParams(
+        task_type="repaint",
+        src_audio="intro.mp3",
+        repainting_start=30.0,  # Start where intro ends
+        repainting_end=-1,      # Generate to desired length
+        caption="build energy, add drums and bass",
+        duration=60.0,  # Total desired length
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Intelligent Audio Stitching">
+    Smoothly connect two separate audio files:
+    
+    ```python
+    # First: Create transition section
+    params = GenerationParams(
+        task_type="repaint",
+        src_audio="part_a.mp3",
+        repainting_start=25.0,  # Last 5 seconds of part A
+        repainting_end=35.0,    # Plus 5 seconds into part B
+        caption="smooth transition matching both sections",
+    )
+    # Model handles rhythm, harmony, timbre connections
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Advanced Repaint Example
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Fix a problematic bridge section
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song_with_bad_bridge.mp3",
+    repainting_start=120.0,  # 2 minutes in
+    repainting_end=150.0,    # 2:30
+    caption="dramatic orchestral build with strings and brass, building tension",
+    lyrics="""[Bridge - building]
+Rising higher, breaking through
+Nothing left to fear""",
+    thinking=True,  # Use LM for better context understanding
+)
+
+config = GenerationConfig(
+    batch_size=3,  # Generate 3 variations to choose from
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+## Complete: Auto-Completion (Base Model Only)
+
+Complete task adds **mixed accompaniment** to a single-track audio (e.g., a cappella vocals).
+
+<Warning>
+Complete is **only available in the base model** (`acestep-v15-base`).
+</Warning>
+
+### How Complete Works
+
+<Steps>
+  <Step title="Analyze Single Track">
+    Model analyzes your single-track input (e.g., vocals only)
+  </Step>
+  
+  <Step title="Generate Accompaniment">
+    Based on your instruction and caption, generates complete accompaniment that:
+    - Matches the style you specified
+    - Harmonizes with the original track
+    - Coordinates rhythm and tempo
+  </Step>
+  
+  <Step title="Mix Output">
+    Returns the complete mix with original track + generated accompaniment
+  </Step>
+</Steps>
+
+### Complete Parameters
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="acapella_vocals.mp3",
+    instruction="Complete the input track with drums, bass, guitar:",  # Specify tracks
+    caption="rock style with driving rhythm, electric guitar, punchy drums",
+)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `src_audio` | Path to single-track/incomplete audio (required) |
+| `instruction` | Specify which tracks to add (e.g., "with drums, bass, guitar") |
+| `caption` | Style and characteristics of the accompaniment |
+
+### Complete Example
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="vocal_only.mp3",
+    instruction="Complete the input track with piano, strings, subtle percussion:",
+    caption="emotional ballad style, warm piano chords, lush strings, gentle brush drums",
+    thinking=False,  # Base model, direct generation
+)
+
+config = GenerationConfig(
+    batch_size=2,
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+## Extract: Stem Separation (Base Model Only)
+
+Extract task **isolates a specific instrument track** from mixed audio.
+
+<Warning>
+Extract is **only available in the base model** (`acestep-v15-base`).
+</Warning>
+
+### Available Tracks
+
+You can extract any of these track types:
+
+<CardGroup cols={3}>
+  <Card title="Rhythm Section">
+    - drums
+    - percussion
+    - bass
+  </Card>
+  
+  <Card title="Melodic">
+    - guitar
+    - keyboard
+    - strings
+    - brass
+    - woodwinds
+    - synth
+  </Card>
+  
+  <Card title="Vocals">
+    - vocals (lead)
+    - backing_vocals
+  </Card>
+</CardGroup>
+
+### Extract Parameters
+
+```python
+params = GenerationParams(
+    task_type="extract",
+    src_audio="full_mix.mp3",
+    instruction="Extract the vocals track from the audio:",  # Specify track
+)
+```
+
+<Tip>
+The `instruction` parameter **must specify which track to extract**. Use the format:
+`"Extract the {TRACK_NAME} track from the audio:"`
+</Tip>
+
+### Extract Examples
+
+<CodeGroup>
+```python Extract Vocals
+params = GenerationParams(
+    task_type="extract",
+    src_audio="full_song.mp3",
+    instruction="Extract the vocals track from the audio:",
+)
+```
+
+```python Extract Drums
+params = GenerationParams(
+    task_type="extract",
+    src_audio="full_mix.mp3",
+    instruction="Extract the drums track from the audio:",
+)
+```
+
+```python Extract Guitar
+params = GenerationParams(
+    task_type="extract",
+    src_audio="band_recording.mp3",
+    instruction="Extract the guitar track from the audio:",
+)
+```
+</CodeGroup>
+
+### Extract Use Cases
+
+- **Stem separation** for remixing
+- **Isolate vocals** for sampling or analysis
+- **Extract instruments** to create backing tracks
+- **Analyze production** by listening to individual elements
+
+## When to Use Each Editing Mode
+
+<CardGroup cols={3}>
+  <Card title="Repaint" icon="paintbrush">
+    **Use when:**
+    - Fixing specific sections
+    - Adding variations
+    - Changing lyrics in a region
+    - Extending audio
+    - Creating smooth transitions
+    
+    **Available in:** All models
+  </Card>
+  
+  <Card title="Complete" icon="puzzle-piece">
+    **Use when:**
+    - Have vocals, need backing
+    - Have single instrument, need full arrangement
+    - Auto-arrange ideas
+    
+    **Available in:** Base model only
+  </Card>
+  
+  <Card title="Extract" icon="scissors">
+    **Use when:**
+    - Need to isolate stems
+    - Creating remixes
+    - Analyzing production
+    - Sampling specific elements
+    
+    **Available in:** Base model only
+  </Card>
+</CardGroup>
+
+## Combining Editing Techniques
+
+You can chain multiple editing operations:
+
+```python
+# Step 1: Extract vocals
+params1 = GenerationParams(
+    task_type="extract",
+    src_audio="original.mp3",
+    instruction="Extract the vocals track from the audio:",
+)
+result1 = generate_music(dit_handler, llm_handler, params1, config, save_dir="./step1")
+
+# Step 2: Complete with new arrangement
+params2 = GenerationParams(
+    task_type="complete",
+    src_audio=result1.audios[0]['path'],  # Use extracted vocals
+    instruction="Complete the input track with synth, electronic drums:",
+    caption="electronic dance music arrangement, EDM style",
+)
+result2 = generate_music(dit_handler, llm_handler, params2, config, save_dir="./step2")
+
+# Step 3: Repaint a specific section
+params3 = GenerationParams(
+    task_type="repaint",
+    src_audio=result2.audios[0]['path'],
+    repainting_start=60.0,
+    repainting_end=90.0,
+    caption="add breakdown section, filter sweeps",
+)
+result3 = generate_music(dit_handler, llm_handler, params3, config, save_dir="./final")
+```
+
+## Tips for Better Editing Results
+
+<CardGroup cols={2}>
+  <Card title="Context Matters" icon="sitemap">
+    Repaint works best when caption matches surrounding audio style for smooth blending
+  </Card>
+  
+  <Card title="Overlap Edges" icon="object-intersect">
+    When extending audio, include 2-3 seconds of overlap in repaint region for natural transitions
+  </Card>
+  
+  <Card title="Batch Generate" icon="layer-group">
+    Use `batch_size=4-8` for editing tasks to get multiple options
+  </Card>
+  
+  <Card title="Precise Timing" icon="clock">
+    Use audio editor to find exact timestamps for `repainting_start/end`
+  </Card>
+  
+  <Card title="Clear Instructions" icon="message">
+    For Extract/Complete, be specific in `instruction` about which tracks
+  </Card>
+  
+  <Card title="Quality Source" icon="star">
+    Higher quality source audio produces better editing results
+  </Card>
+</CardGroup>
+
+## Related Features
+
+- **[Text-to-Music](/features/text-to-music)** - Generate original music
+- **[Cover Generation](/features/cover-generation)** - Transform entire songs
+- **[Multi-Track](/features/multi-track)** - Add individual instrument layers
+- **[Metadata Control](/features/metadata-control)** - Control BPM, key, duration

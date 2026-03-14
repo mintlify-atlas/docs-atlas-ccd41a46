@@ -1,0 +1,610 @@
+---
+title: 'Python API Guide'
+description: 'Use ACE-Step programmatically in Python for music generation'
+icon: 'code'
+---
+
+The ACE-Step Python API provides a clean, programmatic interface for music generation. This guide covers setup, basic usage, and advanced workflows.
+
+## Installation
+
+ACE-Step is installed via pip or uv:
+
+<CodeGroup>
+```bash pip
+pip install acestep
+```
+
+```bash uv
+uv pip install acestep
+```
+</CodeGroup>
+
+## Quick Start
+
+### Basic Text-to-Music Generation
+
+```python
+from acestep.handler import AceStepHandler
+from acestep.llm_inference import LLMHandler
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Initialize handlers
+dit_handler = AceStepHandler()
+llm_handler = LLMHandler()
+
+# Initialize services
+dit_handler.initialize_service(
+    project_root="/path/to/project",
+    config_path="acestep-v15-turbo",
+    device="cuda"
+)
+
+llm_handler.initialize(
+    checkpoint_dir="/path/to/checkpoints",
+    lm_model_path="acestep-5Hz-lm-0.6B",
+    backend="vllm",
+    device="cuda"
+)
+
+# Configure generation parameters
+params = GenerationParams(
+    caption="upbeat electronic dance music with heavy bass",
+    bpm=128,
+    duration=30,
+)
+
+# Configure generation settings
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac",
+)
+
+# Generate music
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/path/to/output"
+)
+
+# Access results
+if result.success:
+    for audio in result.audios:
+        print(f"Generated: {audio['path']}")
+        print(f"Key: {audio['key']}")
+        print(f"Seed: {audio['params']['seed']}")
+else:
+    print(f"Error: {result.error}")
+```
+
+## Core API Components
+
+### Handlers
+
+<Tabs>
+  <Tab title="AceStepHandler">
+    Manages the DiT (Diffusion Transformer) model for music generation.
+    
+    ```python
+    dit_handler = AceStepHandler()
+    dit_handler.initialize_service(
+        project_root="/path/to/project",
+        config_path="acestep-v15-turbo",
+        device="cuda",
+        use_flash_attention=True,
+        offload_to_cpu=False,
+    )
+    ```
+    
+    **Key Methods:**
+    - `initialize_service()` - Load model and configure device
+    - `generate_music()` - Generate audio from parameters
+    - `prepare_seeds()` - Prepare random seeds for batch generation
+  </Tab>
+  
+  <Tab title="LLMHandler">
+    Manages the 5Hz Language Model for metadata generation and audio code generation.
+    
+    ```python
+    llm_handler = LLMHandler()
+    llm_handler.initialize(
+        checkpoint_dir="/path/to/checkpoints",
+        lm_model_path="acestep-5Hz-lm-0.6B",
+        backend="vllm",
+        device="cuda"
+    )
+    ```
+    
+    **Key Methods:**
+    - `initialize()` - Load LM and configure backend
+    - `generate_with_stop_condition()` - Generate metadata and audio codes
+    - `create_sample_from_query()` - Create sample from natural language
+    - `format_sample()` - Format user-provided caption and lyrics
+  </Tab>
+</Tabs>
+
+### Configuration Objects
+
+<Tabs>
+  <Tab title="GenerationParams">
+    Contains all music generation parameters.
+    
+    ```python
+    from acestep.inference import GenerationParams
+    
+    params = GenerationParams(
+        # Task & Inputs
+        task_type="text2music",
+        caption="upbeat pop rock with electric guitars",
+        lyrics="[Instrumental]",
+        instrumental=True,
+        
+        # Metadata
+        bpm=140,
+        keyscale="C Major",
+        timesignature="4",
+        vocal_language="en",
+        duration=30,
+        
+        # DiT Parameters
+        inference_steps=8,
+        guidance_scale=7.0,
+        seed=-1,
+        shift=3.0,
+        infer_method="ode",
+        
+        # LM Parameters
+        thinking=True,
+        lm_temperature=0.85,
+        lm_cfg_scale=2.0,
+        use_cot_metas=True,
+        use_cot_caption=True,
+    )
+    ```
+    
+    See [Generation Parameters Reference](/api/generation-params) for all available parameters.
+  </Tab>
+  
+  <Tab title="GenerationConfig">
+    Contains batch and output configuration.
+    
+    ```python
+    from acestep.inference import GenerationConfig
+    
+    config = GenerationConfig(
+        batch_size=2,
+        allow_lm_batch=False,
+        use_random_seed=True,
+        seeds=None,  # or [42, 123, 456]
+        lm_batch_chunk_size=8,
+        audio_format="flac",
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Result Objects
+
+<Tabs>
+  <Tab title="GenerationResult">
+    Result of music generation.
+    
+    ```python
+    result = generate_music(dit_handler, llm_handler, params, config)
+    
+    if result.success:
+        # Access generated audios
+        for audio in result.audios:
+            path = audio['path']           # File path
+            tensor = audio['tensor']       # Audio tensor [channels, samples]
+            key = audio['key']             # Unique UUID
+            sample_rate = audio['sample_rate']  # Sample rate (48000)
+            params = audio['params']       # Generation params for this audio
+        
+        # Access extra outputs
+        lm_metadata = result.extra_outputs.get('lm_metadata')
+        time_costs = result.extra_outputs.get('time_costs')
+    else:
+        print(f"Error: {result.error}")
+    ```
+  </Tab>
+  
+  <Tab title="UnderstandResult">
+    Result of music understanding from audio codes.
+    
+    ```python
+    from acestep.inference import understand_music
+    
+    result = understand_music(
+        llm_handler,
+        audio_codes="<|audio_code_123|><|audio_code_456|>...",
+    )
+    
+    if result.success:
+        print(f"Caption: {result.caption}")
+        print(f"Lyrics: {result.lyrics}")
+        print(f"BPM: {result.bpm}")
+        print(f"Key: {result.keyscale}")
+        print(f"Duration: {result.duration}s")
+    ```
+  </Tab>
+  
+  <Tab title="CreateSampleResult">
+    Result of creating a sample from natural language.
+    
+    ```python
+    from acestep.inference import create_sample
+    
+    result = create_sample(
+        llm_handler,
+        query="a soft Bengali love song for a quiet evening",
+        vocal_language="bn",
+    )
+    
+    if result.success:
+        # Use generated metadata for generation
+        params = GenerationParams(
+            caption=result.caption,
+            lyrics=result.lyrics,
+            bpm=result.bpm,
+            duration=result.duration,
+            keyscale=result.keyscale,
+            vocal_language=result.language,
+        )
+    ```
+  </Tab>
+</Tabs>
+
+## Common Workflows
+
+### Generate Song with Lyrics
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="pop ballad with emotional vocals",
+    lyrics="""[Verse 1]
+Walking down the street today
+Thinking of the words you used to say
+
+[Chorus]
+I'm moving on, I'm staying strong
+This is where I belong
+""",
+    vocal_language="en",
+    bpm=72,
+    duration=45,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### Simple Mode (Auto-Generate from Description)
+
+```python
+from acestep.inference import create_sample, generate_music
+
+# Step 1: Create sample from description
+sample = create_sample(
+    llm_handler,
+    query="energetic K-pop dance track with catchy hooks",
+    vocal_language="ko",
+)
+
+if sample.success:
+    # Step 2: Generate music using the sample
+    params = GenerationParams(
+        caption=sample.caption,
+        lyrics=sample.lyrics,
+        bpm=sample.bpm,
+        duration=sample.duration,
+        keyscale=sample.keyscale,
+        vocal_language=sample.language,
+        thinking=True,
+    )
+    
+    config = GenerationConfig(batch_size=2)
+    result = generate_music(
+        dit_handler,
+        llm_handler,
+        params,
+        config,
+        save_dir="/output"
+    )
+```
+
+### Format and Enhance User Input
+
+```python
+from acestep.inference import format_sample, generate_music
+
+# Step 1: Format user input
+formatted = format_sample(
+    llm_handler,
+    caption="rock ballad",
+    lyrics="[Verse]\nIn the darkness I find my way...",
+)
+
+if formatted.success:
+    # Step 2: Generate with enhanced input
+    params = GenerationParams(
+        caption=formatted.caption,
+        lyrics=formatted.lyrics,
+        bpm=formatted.bpm,
+        duration=formatted.duration,
+        keyscale=formatted.keyscale,
+        thinking=True,
+        use_cot_metas=False,  # Already formatted
+    )
+    
+    config = GenerationConfig(batch_size=2)
+    result = generate_music(
+        dit_handler,
+        llm_handler,
+        params,
+        config,
+        save_dir="/output"
+    )
+```
+
+### Style Cover/Remix
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original_pop_song.mp3",
+    caption="orchestral symphonic arrangement",
+    audio_cover_strength=0.7,
+    thinking=True,
+    use_cot_metas=True,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+# Access LM-generated metadata
+if result.extra_outputs.get("lm_metadata"):
+    lm_meta = result.extra_outputs["lm_metadata"]
+    print(f"LM detected BPM: {lm_meta.get('bpm')}")
+    print(f"LM detected Key: {lm_meta.get('keyscale')}")
+```
+
+### Batch Generation with Specific Seeds
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="epic cinematic trailer music",
+)
+
+config = GenerationConfig(
+    batch_size=4,
+    seeds=[42, 123, 456],  # 3 seeds, 4th will be random
+    use_random_seed=False,
+    lm_batch_chunk_size=2,
+)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if result.success:
+    print(f"Generated {len(result.audios)} variations")
+    for audio in result.audios:
+        print(f"  Seed {audio['params']['seed']}: {audio['path']}")
+```
+
+### High-Quality Generation (Base Model)
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="intricate jazz fusion with complex harmonies",
+    inference_steps=64,
+    guidance_scale=8.0,
+    use_adg=True,
+    cfg_interval_start=0.0,
+    cfg_interval_end=1.0,
+    shift=3.0,
+    seed=42,
+)
+
+config = GenerationConfig(
+    batch_size=1,
+    use_random_seed=False,
+    audio_format="wav",
+)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### Custom Timesteps
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="jazz fusion with complex harmonies",
+    timesteps=[0.97, 0.76, 0.615, 0.5, 0.395, 0.28, 0.18, 0.085, 0],
+    thinking=True,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+## Helper Functions
+
+### understand_music
+
+Analyze audio codes to extract metadata.
+
+```python
+from acestep.inference import understand_music
+
+result = understand_music(
+    llm_handler,
+    audio_codes="<|audio_code_10695|><|audio_code_54246|>...",
+    temperature=0.85,
+)
+
+if result.success:
+    print(f"Caption: {result.caption}")
+    print(f"Lyrics: {result.lyrics}")
+    print(f"BPM: {result.bpm}")
+    print(f"Key: {result.keyscale}")
+```
+
+### create_sample
+
+Generate a complete music sample from a natural language description.
+
+```python
+from acestep.inference import create_sample
+
+result = create_sample(
+    llm_handler,
+    query="a soft Bengali love song for a quiet evening",
+    instrumental=False,
+    vocal_language="bn",
+)
+
+if result.success:
+    print(f"Caption: {result.caption}")
+    print(f"Lyrics: {result.lyrics}")
+    print(f"BPM: {result.bpm}")
+```
+
+### format_sample
+
+Format and enhance user-provided caption and lyrics.
+
+```python
+from acestep.inference import format_sample
+
+result = format_sample(
+    llm_handler,
+    caption="Latin pop, reggaeton",
+    lyrics="[Verse 1]\nBailando en la noche...",
+    user_metadata={"bpm": 95},
+)
+
+if result.success:
+    print(f"Enhanced Caption: {result.caption}")
+    print(f"Formatted Lyrics: {result.lyrics}")
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Error Handling">
+    Always check `result.success` before accessing result data:
+    
+    ```python
+    result = generate_music(dit_handler, llm_handler, params, config)
+    
+    if not result.success:
+        print(f"Generation failed: {result.error}")
+        print(f"Status: {result.status_message}")
+    else:
+        # Process successful result
+        for audio in result.audios:
+            process_audio(audio['path'])
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory Management">
+    ACE-Step includes automatic VRAM management, but you can still optimize:
+    
+    - Reduce `batch_size` if OOM errors occur
+    - Reduce `lm_batch_chunk_size` for LM operations
+    - Enable `offload_to_cpu=True` during initialization for GPUs &lt;20GB
+    - Enable `quantization="int8_weight_only"` for GPUs &lt;20GB
+  </Accordion>
+  
+  <Accordion title="Accessing Time Costs">
+    ```python
+    result = generate_music(dit_handler, llm_handler, params, config)
+    
+    if result.success:
+        time_costs = result.extra_outputs.get("time_costs", {})
+        print(f"LM Phase 1: {time_costs.get('lm_phase1_time', 0):.2f}s")
+        print(f"LM Phase 2: {time_costs.get('lm_phase2_time', 0):.2f}s")
+        print(f"DiT Total: {time_costs.get('dit_total_time_cost', 0):.2f}s")
+        print(f"Pipeline Total: {time_costs.get('pipeline_total_time', 0):.2f}s")
+    ```
+  </Accordion>
+  
+  <Accordion title="Parameter Tuning">
+    **For Best Quality:**
+    - Use base model with `inference_steps=64` or higher
+    - Enable `use_adg=True`
+    - Set `guidance_scale=7.0-9.0`
+    - Set `shift=3.0`
+    - Use `audio_format="wav"`
+    
+    **For Speed:**
+    - Use turbo model with `inference_steps=8`
+    - Disable ADG (`use_adg=False`)
+    - Use `infer_method="ode"`
+    - Use `audio_format="mp3"` or `"flac"`
+    
+    **For Consistency:**
+    - Set `use_random_seed=False`
+    - Provide fixed `seeds` list or single `seed`
+    - Keep `lm_temperature` lower (0.7-0.85)
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="server" href="/guides/rest-api">
+    Integrate ACE-Step into web applications
+  </Card>
+  
+  <Card title="CLI Guide" icon="terminal" href="/guides/cli">
+    Use the command-line interface for batch processing
+  </Card>
+  
+  <Card title="Generation Parameters" icon="sliders" href="/api/generation-params">
+    Detailed reference for all generation parameters
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/handler">
+    Complete Python API reference
+  </Card>
+</CardGroup>

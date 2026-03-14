@@ -1,0 +1,286 @@
+---
+title: Authentication
+description: How to authenticate requests to the ACE-Step REST API
+---
+
+# Authentication
+
+The ACE-Step REST API supports optional API key authentication. When enabled, all requests must include a valid API key.
+
+## Authentication Methods
+
+Two authentication methods are supported:
+
+### Method A: ai_token in Request Body
+
+Include the `ai_token` field in your JSON request body:
+
+```json
+{
+  "ai_token": "your-api-key",
+  "prompt": "upbeat pop song",
+  "lyrics": "Hello world"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "ai_token": "your-api-key",
+    "prompt": "upbeat pop song",
+    "thinking": true
+  }'
+```
+
+### Method B: Authorization Header
+
+Use the standard `Authorization` header with Bearer token:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Authorization: Bearer your-api-key' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "thinking": true
+  }'
+```
+
+<Note>
+  The `Authorization` header method is recommended for better security, as it keeps credentials out of request bodies and logs.
+</Note>
+
+## Setting the API Key
+
+### Environment Variable
+
+Set the `ACESTEP_API_KEY` environment variable before starting the server:
+
+```bash
+# Linux/macOS
+export ACESTEP_API_KEY=your-secret-key
+acestep-api
+
+# Windows (PowerShell)
+$env:ACESTEP_API_KEY="your-secret-key"
+acestep-api
+
+# Windows (Command Prompt)
+set ACESTEP_API_KEY=your-secret-key
+acestep-api
+```
+
+### Command-Line Argument
+
+Pass the API key directly when starting the server:
+
+```bash
+python -m acestep.api_server --api-key your-secret-key
+```
+
+### Using .env File
+
+Create a `.env` file in your project root:
+
+```bash
+ACESTEP_API_KEY=your-secret-key
+ACESTEP_API_HOST=127.0.0.1
+ACESTEP_API_PORT=8001
+```
+
+The server will automatically load environment variables from this file.
+
+## Disabling Authentication
+
+Authentication is disabled by default. To run without authentication, simply start the server without setting an API key:
+
+```bash
+acestep-api
+```
+
+<Warning>
+  Running without authentication is only recommended for local development. Always enable authentication for production deployments accessible over a network.
+</Warning>
+
+## Security Best Practices
+
+### Generate Strong API Keys
+
+Use cryptographically secure random strings for API keys:
+
+```bash
+# Linux/macOS - Generate a random 32-character key
+openssl rand -hex 32
+
+# Python - Generate a random key
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### Use HTTPS in Production
+
+Always use HTTPS to encrypt API traffic when deploying to production:
+
+```bash
+# Use a reverse proxy like nginx or deploy behind a load balancer
+# that handles TLS termination
+```
+
+### Rotate Keys Regularly
+
+Implement a key rotation policy:
+
+1. Generate a new API key
+2. Update clients to use the new key
+3. Update server configuration
+4. Invalidate old key after transition period
+
+### Environment-Specific Keys
+
+Use different API keys for different environments:
+
+```bash
+# Development
+export ACESTEP_API_KEY=dev-key-123
+
+# Staging
+export ACESTEP_API_KEY=staging-key-456
+
+# Production
+export ACESTEP_API_KEY=prod-key-789
+```
+
+### Never Commit Keys to Version Control
+
+Add `.env` to your `.gitignore`:
+
+```gitignore
+# .gitignore
+.env
+.env.local
+.env.*.local
+```
+
+## Authentication Error Handling
+
+### Missing API Key (401 Unauthorized)
+
+When authentication is enabled but no key is provided:
+
+```json
+{
+  "detail": "Missing API key"
+}
+```
+
+### Invalid API Key (401 Unauthorized)
+
+When an incorrect API key is provided:
+
+```json
+{
+  "detail": "Invalid API key"
+}
+```
+
+## Client Implementation Examples
+
+### Python with requests
+
+```python
+import requests
+import os
+
+API_KEY = os.getenv('ACESTEP_API_KEY')
+BASE_URL = 'http://localhost:8001'
+
+# Method 1: Authorization header (recommended)
+headers = {
+    'Authorization': f'Bearer {API_KEY}',
+    'Content-Type': 'application/json'
+}
+
+response = requests.post(
+    f'{BASE_URL}/release_task',
+    headers=headers,
+    json={
+        'prompt': 'upbeat pop song',
+        'thinking': True
+    }
+)
+
+# Method 2: In request body
+response = requests.post(
+    f'{BASE_URL}/release_task',
+    json={
+        'ai_token': API_KEY,
+        'prompt': 'upbeat pop song',
+        'thinking': True
+    }
+)
+```
+
+### JavaScript with fetch
+
+```javascript
+const API_KEY = process.env.ACESTEP_API_KEY;
+const BASE_URL = 'http://localhost:8001';
+
+// Method 1: Authorization header (recommended)
+const response = await fetch(`${BASE_URL}/release_task`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    prompt: 'upbeat pop song',
+    thinking: true
+  })
+});
+
+// Method 2: In request body
+const response = await fetch(`${BASE_URL}/release_task`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    ai_token: API_KEY,
+    prompt: 'upbeat pop song',
+    thinking: true
+  })
+});
+```
+
+### cURL
+
+```bash
+# Method 1: Authorization header (recommended)
+curl -X POST http://localhost:8001/release_task \
+  -H 'Authorization: Bearer your-api-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "upbeat pop song", "thinking": true}'
+
+# Method 2: In request body
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "ai_token": "your-api-key",
+    "prompt": "upbeat pop song",
+    "thinking": true
+  }'
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Endpoints Reference" icon="code" href="/api/rest-endpoints">
+    Explore all available API endpoints
+  </Card>
+  <Card title="Usage Examples" icon="lightbulb" href="/api/rest-examples">
+    See complete workflow examples
+  </Card>
+</CardGroup>

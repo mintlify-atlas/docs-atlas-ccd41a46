@@ -1,0 +1,170 @@
+---
+title: GenerationConfig
+description: Configuration dataclass for batch and output settings
+---
+
+`GenerationConfig` is a dataclass that configures batch processing, seed handling, and output format settings for music generation.
+
+## Class Definition
+
+```python
+@dataclass
+class GenerationConfig:
+    """Configuration for music generation."""
+```
+
+## Parameters
+
+<ParamField path="batch_size" type="int" default="2">
+  Number of audio samples to generate in parallel (1-8). Higher values require more GPU memory.
+</ParamField>
+
+<ParamField path="allow_lm_batch" type="bool" default="False">
+  Whether to allow batch processing in LM. Faster when `batch_size >= 2` and `thinking=True`.
+</ParamField>
+
+<ParamField path="use_random_seed" type="bool" default="True">
+  Whether to use random seed. `True` for different results each time, `False` for reproducible results.
+</ParamField>
+
+<ParamField path="seeds" type="Optional[List[int]]" default="None">
+  Seed(s) for batch generation. Can be:
+  - `None`: Use random seeds (when `use_random_seed=True`) or `params.seed` (when `use_random_seed=False`)
+  - `List[int]`: List of seeds, will be padded with random seeds if fewer than `batch_size`
+  - `int`: Single seed value (will be converted to list and padded)
+</ParamField>
+
+<ParamField path="lm_batch_chunk_size" type="int" default="8">
+  Batch chunk size for LM processing. Controls how many samples to process at once in the LLM.
+</ParamField>
+
+<ParamField path="constrained_decoding_debug" type="bool" default="False">
+  Whether to enable constrained decoding debug logging.
+</ParamField>
+
+<ParamField path="audio_format" type="str" default="flac">
+  Output audio format. One of: `"mp3"`, `"wav"`, `"flac"`, `"wav32"`, `"opus"`, `"aac"`. Default: `"flac"` for fast saving.
+</ParamField>
+
+## Methods
+
+<ResponseField name="to_dict" type="Dict[str, Any]">
+  Convert config to dictionary for JSON serialization.
+  
+  ```python
+  config = GenerationConfig(batch_size=4, audio_format="wav")
+  config_dict = config.to_dict()
+  ```
+</ResponseField>
+
+## Usage Examples
+
+### Basic Configuration
+
+```python
+from acestep.inference import GenerationConfig
+
+# Simple configuration for single generation
+config = GenerationConfig(
+    batch_size=1,
+    audio_format="flac",
+)
+```
+
+### Batch Generation with Random Seeds
+
+```python
+# Generate 4 variations with random seeds
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=True,
+    audio_format="wav",
+)
+```
+
+### Reproducible Generation with Fixed Seeds
+
+```python
+# Generate 3 samples with specific seeds
+config = GenerationConfig(
+    batch_size=3,
+    use_random_seed=False,
+    seeds=[42, 123, 456],
+    audio_format="flac",
+)
+```
+
+### Large Batch with LM Chunking
+
+```python
+# Generate 8 samples with LM batch processing
+config = GenerationConfig(
+    batch_size=8,
+    allow_lm_batch=True,
+    lm_batch_chunk_size=4,  # Process 4 at a time
+    use_random_seed=True,
+)
+```
+
+### Seed Padding Behavior
+
+```python
+# Provide fewer seeds than batch_size
+config = GenerationConfig(
+    batch_size=5,
+    seeds=[42, 123],  # Only 2 seeds
+    use_random_seed=True,  # Remaining 3 will be random
+)
+# Result: seeds will be [42, 123, random1, random2, random3]
+```
+
+## Seed Handling
+
+The `seeds` parameter supports flexible seed specification:
+
+| Configuration | Behavior |
+|--------------|----------|
+| `seeds=None, use_random_seed=True` | All seeds are random |
+| `seeds=None, use_random_seed=False` | Uses `params.seed` for all samples |
+| `seeds=[42, 123], batch_size=2` | Uses provided seeds |
+| `seeds=[42], batch_size=3` | Uses `[42, random1, random2]` |
+| `seeds=42, batch_size=2` | Converts to `[42]`, then pads: `[42, random1]` |
+
+## Audio Format Options
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| `flac` | Lossless compression (default) | Best balance of quality and file size |
+| `wav` | Uncompressed PCM (16-bit) | Maximum compatibility |
+| `wav32` | Uncompressed PCM (32-bit float) | Highest quality for processing |
+| `mp3` | Lossy compression | Smallest file size |
+| `opus` | Lossy compression | Good quality at low bitrates |
+| `aac` | Lossy compression | Apple ecosystem compatibility |
+
+## Performance Considerations
+
+### Batch Size
+
+- Larger `batch_size` is faster per-sample but requires more VRAM
+- ACE-Step includes automatic VRAM guard that reduces `batch_size` if needed
+- Recommended: Start with `batch_size=2` and increase if VRAM allows
+
+### LM Batch Chunking
+
+- `lm_batch_chunk_size` controls memory usage during LLM inference
+- Lower values use less VRAM but are slower
+- Set to `batch_size` for maximum speed (if VRAM allows)
+- Recommended: 4-8 for most GPUs
+
+### Audio Format Performance
+
+- `flac` (default): Fast encoding, small files
+- `wav`: Fastest encoding, large files
+- `mp3`: Slower encoding, smallest files
+- `wav32`: Same as `wav` but 2x file size
+
+## See Also
+
+- [GenerationParams](/api/generation-params) - Music generation parameters
+- [generate_music](/api/generate-music) - Main generation function
+- [GPU Compatibility Guide](/concepts/gpu-compatibility) - VRAM requirements and optimization

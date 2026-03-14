@@ -1,0 +1,392 @@
+---
+title: "Training Workflow"
+description: "Complete LoRA training workflow from preprocessing to deployed adapters"
+---
+
+## Complete Training Workflow
+
+This guide walks through the full LoRA training process using both the Gradio UI and command-line interface.
+
+<Steps>
+  <Step title="Prepare dataset">
+    Organize audio files, lyrics, and annotations. See [Dataset Preparation](/training/dataset-preparation) for details.
+  </Step>
+  
+  <Step title="Preprocess data">
+    Convert audio and metadata to training-ready tensor files.
+  </Step>
+  
+  <Step title="Configure training">
+    Set hyperparameters: learning rate, batch size, epochs, rank, etc.
+  </Step>
+  
+  <Step title="Train LoRA">
+    Run the training loop and monitor progress.
+  </Step>
+  
+  <Step title="Evaluate results">
+    Test generated music with the trained LoRA adapter.
+  </Step>
+  
+  <Step title="Deploy LoRA">
+    Load the trained weights for production use.
+  </Step>
+</Steps>
+
+## Method 1: Gradio UI (Recommended)
+
+The Gradio UI provides a one-click training workflow with visual feedback.
+
+### Prerequisites
+
+<Warning>
+  Disable service pre-initialization to avoid VRAM conflicts during preprocessing:
+  
+  **Windows** (`start_gradio_ui.bat`):
+  ```batch
+  if not defined INIT_SERVICE set INIT_SERVICE=--init_service false
+  ```
+  
+  **Linux/macOS** (`start_gradio_ui.sh`):
+  ```bash
+  : "${INIT_SERVICE:=--init_service false}"
+  ```
+</Warning>
+
+### Step 1: Load Dataset
+
+1. Launch Gradio UI
+2. Select LM model if you need caption generation (optional)
+3. Navigate to **LoRA Training** tab
+4. Enter dataset directory path and click **Scan**
+
+The scanner loads:
+- Audio files and duration metadata
+- Lyrics from `.lyrics.txt` files  
+- Captions from `.caption.txt` or JSON
+- BPM/key from JSON or CSV files
+
+### Step 2: Review and Edit Data
+
+Check the dataset table:
+
+| Column | Description |
+|--------|-------------|
+| **Duration** | Auto-detected from audio file |
+| **Lyrics** | ✅ if `.lyrics.txt` exists |
+| **Labeled** | ✅ if caption is present |
+| **BPM** | From JSON/CSV or auto-labeled |
+| **Key** | From JSON/CSV or auto-labeled |
+| **Caption** | Style description for conditioning |
+
+Configuration options:
+- Uncheck **All Instrumental** if dataset has vocals
+- Enter **Custom Trigger Tag** (optional, limited effect)
+- Set **Genre Ratio** to 0 (caption-based training is more effective)
+
+### Step 3: Auto-Label (Optional)
+
+If captions are missing and LM model is loaded:
+
+1. Ensure BPM/Key are populated (use Key-BPM-Finder if needed)
+2. Click **Auto Label** to generate captions with LM
+3. Wait for processing to complete
+
+<Note>
+  LM-generated BPM/Key values tend to hallucinate. Always get these from Key-BPM-Finder before using LM labeling.
+</Note>
+
+### Step 4: Save Dataset
+
+1. Review all entries for accuracy
+2. Edit individual entries if needed (**remember to click Save after each edit**)
+3. Enter output path for dataset JSON
+4. Click **Save Dataset**
+
+### Step 5: Preprocess Tensors
+
+<Warning>
+  If you used LM for labeling and VRAM is insufficient, restart Gradio **without** selecting the LM model. After restarting, load the saved JSON file to continue.
+</Warning>
+
+1. Enter save path for tensor files (e.g., `./preprocessed_tensors`)
+2. Click **Preprocess** and wait for completion
+3. Monitor progress in the console
+
+Preprocessing generates:
+- Encoded audio latents (via VAE)
+- Text embeddings (via text encoder)
+- Condition encodings (via DiT encoder)
+- Metadata JSON files
+
+### Step 6: Train LoRA
+
+<Note>
+  After preprocessing, restart Gradio again to free VRAM before training.
+</Note>
+
+1. Go to **Train LoRA** tab
+2. Enter preprocessed tensor path and click **Load Dataset**
+3. Configure training parameters (or use defaults)
+4. Click **Start Training**
+5. Monitor loss curves and checkpoints
+
+### Training Parameters
+
+| Parameter | Description | Suggested Value |
+|-----------|-------------|----------------|
+| **Max Epochs** | Total training epochs | 500 for ~100 songs<br/>800 for 10-20 songs |
+| **Batch Size** | Samples per training step | 1 (increase if VRAM allows) |
+| **Save Every N Epochs** | Checkpoint interval | 50-100 for long training<br/>10-20 for short training |
+| **Learning Rate** | AdamW LR | `1e-4` (default) |
+| **Rank** | LoRA rank | 64 (default, 16-128 range) |
+| **Alpha** | LoRA scaling | 128 (typically 2x rank) |
+
+<Accordion title="Advanced parameters">
+  - **Gradient Accumulation**: Steps to accumulate before optimizer update (default: 4)
+  - **Warmup Steps**: Linear LR warmup duration (default: 100)
+  - **Weight Decay**: L2 regularization (default: 0.01)
+  - **Gradient Checkpointing**: Enable to save VRAM at cost of ~10-20% slower training
+  - **Max Grad Norm**: Gradient clipping threshold (default: 1.0)
+</Accordion>
+
+### Step 7: Load and Use LoRA
+
+1. After training completes, **restart Gradio**
+2. Launch with full service initialization (default settings)
+3. Wait for model initialization
+4. Click **Load LoRA** and select trained checkpoint
+5. Generate music with the learned style
+
+Checkpoints are saved in the output directory:
+```
+lora_output/
+├── checkpoint-epoch-50/
+│   ├── adapter_config.json
+│   ├── adapter_model.safetensors
+│   └── training_state.pt
+├── checkpoint-epoch-100/
+└── final/
+```
+
+## Method 2: Command-Line Training
+
+For automated workflows or server environments, use `train.py` directly.
+
+### Using Built-in Trainer
+
+<CodeGroup>
+```bash Preprocess
+python train.py \
+  --preprocess \
+  --audio-dir ./my_dataset \
+  --dataset-json ./my_dataset.json \
+  --tensor-output ./preprocessed_tensors \
+  --checkpoint-dir ./checkpoints \
+  --model-variant turbo
+```
+
+```bash Train LoRA
+python train.py \
+  --dataset-dir ./preprocessed_tensors \
+  --output-dir ./lora_output \
+  --checkpoint-dir ./checkpoints \
+  --model-variant turbo \
+  --epochs 500 \
+  --batch-size 1 \
+  --lr 1e-4 \
+  --rank 64 \
+  --alpha 128 \
+  --save-every 50
+```
+
+```bash Train with Gradient Checkpointing
+python train.py \
+  --dataset-dir ./preprocessed_tensors \
+  --output-dir ./lora_output \
+  --checkpoint-dir ./checkpoints \
+  --model-variant turbo \
+  --epochs 500 \
+  --gradient-checkpointing \
+  --batch-size 1
+```
+</CodeGroup>
+
+### Key Command-Line Arguments
+
+| Argument | Description | Default |
+|----------|-------------|----------|
+| `--dataset-dir` | Path to preprocessed tensors | Required |
+| `--output-dir` | Where to save checkpoints | `./lora_output` |
+| `--checkpoint-dir` | ACE-Step model checkpoints | Required |
+| `--model-variant` | Model type: `base`, `sft`, `turbo` | `turbo` |
+| `--epochs` | Maximum training epochs | 100 |
+| `--batch-size` | Batch size per device | 1 |
+| `--lr` | Learning rate | `1e-4` |
+| `--rank` | LoRA rank | 64 |
+| `--alpha` | LoRA alpha scaling | 128 |
+| `--save-every` | Checkpoint save interval (epochs) | 10 |
+| `--gradient-checkpointing` | Enable gradient checkpointing | False |
+| `--gradient-accumulation` | Gradient accumulation steps | 4 |
+
+## Monitoring Training Progress
+
+### Loss Curves
+
+Training loss should generally decrease over time:
+- **Initial loss**: Typically 0.5-2.0 depending on model and data
+- **Target loss**: 0.05-0.2 for well-fitted LoRA
+- **Overfitting signs**: Validation loss increases while training loss decreases
+
+### TensorBoard (Optional)
+
+If Lightning Fabric logging is enabled:
+
+```bash
+tensorboard --logdir ./lora_output/lightning_logs
+```
+
+View at `http://localhost:6006`
+
+### Checkpoint Files
+
+Each checkpoint contains:
+- `adapter_config.json` — LoRA configuration
+- `adapter_model.safetensors` — Trained adapter weights
+- `training_state.pt` — Optimizer state for resuming
+
+## Evaluating Results
+
+### Qualitative Evaluation
+
+1. Load the trained LoRA in Gradio
+2. Generate 5-10 samples with varied prompts
+3. Listen for:
+   - **Style consistency** — Does it match training data style?
+   - **Quality** — Are outputs musical and coherent?
+   - **Diversity** — Do different prompts produce varied results?
+   - **Overfitting** — Does it sound too similar to training examples?
+
+### A/B Testing
+
+Compare generations:
+- **Base model** (no LoRA) vs. **LoRA-enhanced**
+- **Early checkpoint** (epoch 100) vs. **final checkpoint** (epoch 500)
+- **Different ranks** (rank 32 vs. 64 vs. 128)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Out of memory during preprocessing">
+    **Solution 1**: Restart Gradio between steps to free VRAM
+    
+    **Solution 2**: Use `--max-duration` flag to skip very long songs:
+    ```bash
+    python train.py --preprocess --max-duration 300 ...  # Skip >5min
+    ```
+    
+    **Solution 3**: Process dataset in smaller batches
+  </Accordion>
+  
+  <Accordion title="Out of memory during training">
+    **Enable gradient checkpointing**:
+    ```bash
+    python train.py --gradient-checkpointing ...
+    ```
+    
+    **Reduce rank**:
+    ```bash
+    python train.py --rank 32 --alpha 64 ...
+    ```
+    
+    **Increase gradient accumulation**:
+    ```bash
+    python train.py --gradient-accumulation 8 ...
+    ```
+    
+    **Use 8-bit optimizer** (if `bitsandbytes` installed):
+    ```bash
+    python train.py --optimizer-type adamw8bit ...
+    ```
+  </Accordion>
+  
+  <Accordion title="Loss not decreasing">
+    **Check learning rate**: Try `1e-5` to `1e-3` range
+    
+    **Verify data**: Ensure captions and metadata are accurate
+    
+    **Increase capacity**: Try higher rank (64 → 128)
+    
+    **Check dataset size**: &lt;8 songs may be insufficient
+  </Accordion>
+  
+  <Accordion title="Overfitting (memorizing training data)">
+    **Increase dataset size**: Add more diverse examples
+    
+    **Reduce capacity**: Lower rank (64 → 32 or 16)
+    
+    **Add dropout**: Increase LoRA dropout (0.1 → 0.2)
+    
+    **Early stopping**: Use earlier checkpoints
+  </Accordion>
+  
+  <Accordion title="LoRA has no effect when loaded">
+    **Check file path**: Ensure adapter files exist
+    
+    **Verify model variant**: LoRA must match base model (turbo/base/sft)
+    
+    **Restart Gradio**: Reload models after training
+    
+    **Check target modules**: Ensure LoRA targets correct layers
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Note>
+  **LoKR Training Recommendation**
+  
+  LoKR (Low-Rank Kronecker) adapters offer 10x faster training than LoRA. What previously took 1 hour now takes ~5 minutes. Try LoKR training via:
+  - Gradio **Train LoKr** tab
+  - [Side-Step toolkit](/training/advanced-training) for CLI workflows
+  
+  See the [Side-Step Training Guide](https://github.com/koda-dernet/Side-Step) for details.
+</Note>
+
+### Data Quality
+- Use high-quality audio (320kbps MP3 minimum, lossless preferred)
+- Manually review and correct transcribed lyrics
+- Ensure BPM/key metadata is accurate (use Key-BPM-Finder)
+- Write descriptive captions that capture musical characteristics
+
+### Training Configuration
+- Start with default hyperparameters (rank 64, LR 1e-4)
+- Enable gradient checkpointing if VRAM is limited
+- Save checkpoints frequently to evaluate different training stages
+- Use validation split (10-20%) if dataset is large enough
+
+### VRAM Management
+- Restart Gradio between preprocessing and training
+- Don't load LM model during preprocessing/training unless needed
+- Use batch size 1 with gradient accumulation for effective larger batches
+- Consider 8-bit optimizer for 30% VRAM savings
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Advanced Training" icon="rocket" href="/training/advanced-training">
+    Explore Side-Step toolkit, LoKR, and gradient sensitivity analysis
+  </Card>
+  
+  <Card title="Dataset Preparation" icon="database" href="/training/dataset-preparation">
+    Review data preparation best practices
+  </Card>
+  
+  <Card title="LoRA Overview" icon="book" href="/training/lora-overview">
+    Understand LoRA fundamentals and use cases
+  </Card>
+  
+  <Card title="Gradio UI Guide" icon="window" href="/guides/gradio-ui">
+    Full Gradio interface documentation
+  </Card>
+</CardGroup>

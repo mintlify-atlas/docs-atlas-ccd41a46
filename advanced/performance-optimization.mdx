@@ -1,0 +1,408 @@
+---
+title: 'Performance Optimization'
+description: 'Optimize ACE-Step 1.5 for maximum performance and efficiency'
+---
+
+## Overview
+
+ACE-Step 1.5 includes sophisticated performance optimization features that adapt to your hardware. This guide covers model selection, quantization, offloading strategies, and backend choices to maximize throughput and minimize latency.
+
+## Model Selection Strategy
+
+### DiT Model Variants
+
+Choose the DiT model based on your speed vs. quality requirements:
+
+- **acestep-v15-turbo**: Fast generation, supports 4-8 inference steps, no CFG (guidance scale ignored)
+- **acestep-v15-base**: Higher quality, requires 16-32 steps, supports CFG for better control
+
+<Tip>
+For most use cases, `acestep-v15-turbo` with 8 steps provides the best speed/quality balance.
+</Tip>
+
+### Language Model Selection
+
+The 5Hz Language Model comes in three sizes:
+
+| Model | VRAM | Use Case | Quality |
+|-------|------|----------|----------|
+| **0.6B** | ~1.8GB | Low VRAM GPUs (6-12GB), fast inference | Good |
+| **1.7B** | ~4.4GB | Mid-range GPUs (12-20GB), balanced | Better |
+| **4B** | ~9.6GB | High-end GPUs (≥24GB), best quality | Best |
+
+<Note>
+The LM size affects both VRAM usage and KV cache size. Larger models produce better metadata but require more memory and compute.
+</Note>
+
+## Quantization for VRAM Reduction
+
+### INT8 Quantization
+
+INT8 weight-only quantization reduces DiT model VRAM by ~50% (from ~4.7GB to ~2.4GB) with minimal quality loss:
+
+```python
+# Enable INT8 quantization
+python acestep \
+  --quantization int8_weight_only \
+  --compile-model  # Required for quantization
+```
+
+**When to use INT8:**
+- GPUs with ≤20GB VRAM
+- Running with LM enabled on mid-range GPUs
+- Maximizing batch size
+
+**Performance impact:**
+- Memory: ~50% reduction
+- Speed: Slightly slower first run (compilation), similar or faster after warmup
+- Quality: Negligible difference for most use cases
+
+<Warning>
+Quantization requires `torch.compile` to be enabled. On macOS (MPS), quantization is not supported.
+</Warning>
+
+### Other Quantization Modes
+
+```python
+# FP8 weight-only (experimental, requires Ampere+ GPUs)
+python acestep --quantization fp8_weight_only --compile-model
+
+# W8A8 dynamic (weight + activation quantization)
+python acestep --quantization w8a8_dynamic --compile-model
+```
+
+## CPU Offloading Strategies
+
+### Standard CPU Offload
+
+Offload VAE and Text Encoder to CPU when not in use:
+
+```python
+python acestep --offload-to-cpu
+```
+
+**What it does:**
+- Keeps DiT on GPU (most compute-intensive)
+- Moves VAE to GPU only during decode, then back to CPU
+- Moves Text Encoder to GPU only during encoding, then back to CPU
+
+**VRAM savings:** ~1.5GB
+
+**When to use:**
+- GPUs with 8-20GB VRAM
+- Running with LM enabled
+- Batch sizes > 1
+
+### DiT Offload (Aggressive)
+
+Offload DiT to CPU between inference steps:
+
+```python
+python acestep --offload-to-cpu --offload-dit-to-cpu
+```
+
+**What it does:**
+- Moves DiT to GPU only during each diffusion step
+- Significantly slower but maximum VRAM savings
+
+**VRAM savings:** ~4.7GB (entire DiT model)
+
+**When to use:**
+- GPUs with ≤8GB VRAM
+- Enabling LM on low-VRAM GPUs
+- Last resort before falling back to CPU-only
+
+<Warning>
+DiT offload adds significant latency (~30-50% slower). Only use on very low VRAM GPUs.
+</Warning>
+
+### Adaptive VAE Decode
+
+ACE-Step automatically adapts VAE decode strategy based on available VRAM:
+
+1. **GPU tiled decode** (chunk size: 64-1536, auto-selected) — Fastest
+2. **GPU decode with CPU offload** (chunk size: 256) — Balanced
+3. **Full CPU decode** (chunk size: 64) — Slowest, but always works
+
+No configuration needed — the system automatically falls back through these tiers on OOM.
+
+## Batch Generation for Throughput
+
+### Optimal Batch Sizes by GPU Tier
+
+<CodeGroup>
+```bash 8GB GPU (Tier 4)
+# Without LM: batch=4
+python acestep --batch-size 4
+
+# With LM 0.6B: batch=2
+python acestep --batch-size 2 --lm-model acestep-5Hz-lm-0.6B
+```
+
+```bash 16GB GPU (Tier 6a)
+# Without LM: batch=8
+python acestep --batch-size 8
+
+# With LM 1.7B: batch=4
+python acestep --batch-size 4 --lm-model acestep-5Hz-lm-1.7B
+```
+
+```bash 24GB GPU (Unlimited)
+# Without LM: batch=8
+python acestep --batch-size 8
+
+# With LM 4B: batch=8
+python acestep --batch-size 8 --lm-model acestep-5Hz-lm-4B
+```
+</CodeGroup>
+
+<Tip>
+VAE decode is batch-sequential, so batch size doesn't affect VAE VRAM usage. This allows larger batches than you might expect.
+</Tip>
+
+## LM Backend Selection
+
+### vLLM (Recommended for NVIDIA)
+
+Fastest backend for CUDA GPUs with ≥8GB VRAM:
+
+```python
+python acestep --lm-backend vllm
+```
+
+**Advantages:**
+- PagedAttention for efficient KV cache management
+- Continuous batching for better throughput
+- Optimized CUDA kernels
+
+**Requirements:**
+- NVIDIA GPU with CUDA
+- ≥8GB VRAM (for 0.6B model)
+
+**Memory usage:**
+- Higher KV cache overhead than PyTorch backend
+- Better for single long sequences than many short ones
+
+### PyTorch (Universal Fallback)
+
+Works everywhere, lower memory overhead:
+
+```python
+python acestep --lm-backend pt
+```
+
+**When to use:**
+- Low VRAM GPUs (6-8GB)
+- AMD ROCm GPUs (vLLM has limited ROCm support)
+- CPU-only inference
+- Intel XPU
+
+### MLX (Apple Silicon)
+
+Optimized for macOS with Apple Silicon:
+
+```python
+python acestep --lm-backend mlx --device mps
+```
+
+**Advantages:**
+- Native Apple Silicon acceleration
+- Unified memory architecture (no explicit offloading needed)
+- Lower power consumption
+
+**Auto-selected** on macOS with MPS available.
+
+## DiT Inference Optimization
+
+### Inference Steps
+
+<Accordion title="Turbo Model (4-8 steps)">
+The `acestep-v15-turbo` model is distilled for fast inference:
+
+- **4 steps**: Fastest, slight quality reduction
+- **6 steps**: Good balance
+- **8 steps**: Recommended default
+- **>8 steps**: No quality improvement
+
+```python
+python acestep --inference-steps 8
+```
+</Accordion>
+
+<Accordion title="Base Model (16-32 steps)">
+The `acestep-v15-base` model requires more steps:
+
+- **16 steps**: Minimum for decent quality
+- **24 steps**: Recommended
+- **32 steps**: Marginal improvement
+
+```python
+python acestep --config-path acestep-v15-base --inference-steps 24
+```
+</Accordion>
+
+### Flash Attention
+
+Flash Attention 2 dramatically reduces DiT VRAM usage:
+
+- **Without Flash Attention**: ~0.3-0.6GB per batch item (materialized attention matrices)
+- **With Flash Attention**: ~0.001-0.004GB per batch item
+
+```bash
+# Install flash-attn (NVIDIA GPUs only, CUDA 11.8+)
+pip install flash-attn --no-build-isolation
+```
+
+Auto-detected and enabled when available.
+
+### torch.compile
+
+JIT compilation for faster inference:
+
+```python
+python acestep --compile-model
+```
+
+**First-run behavior:**
+- Initial compilation overhead (~30-60s)
+- Subsequent runs are faster
+
+**Performance gain:**
+- 10-20% faster after warmup
+- Essential for quantization
+
+<Note>
+`torch.compile` is disabled by default on MPS (macOS) as it's not fully supported. Intel XPU also disables it.
+</Note>
+
+## Think Mode vs Simple Mode
+
+### Think Mode (Chain-of-Thought)
+
+Enables LM reasoning for better metadata:
+
+```python
+python acestep \
+  --thinking \
+  --use-cot-metas \
+  --use-cot-caption
+```
+
+**Performance impact:**
+- **LM time increases 2-5x** (from ~0.5s to 2-3s)
+- DiT time unchanged
+- Better quality metadata (BPM, key, time signature)
+
+**When to use:**
+- Creative tasks requiring nuanced interpretation
+- When LM has sufficient context
+- Not time-sensitive
+
+### Simple Mode
+
+Direct metadata generation without reasoning:
+
+```python
+python acestep  # Think mode off by default
+```
+
+**Performance impact:**
+- Fast LM inference (~0.5s)
+- Suitable for real-time applications
+
+<Tip>
+For API deployments, disable think mode unless users specifically request it. The quality improvement is often not worth the latency increase.
+</Tip>
+
+## Configuration Tips from gpu_config.py
+
+### Memory Budgeting
+
+ACE-Step uses empirical VRAM measurements for adaptive configuration:
+
+```python
+# Base model weights (BF16)
+DiT turbo:     4.7GB
+VAE:           0.33GB
+Text Encoder:  1.2GB
+CUDA context:  0.5GB
+
+# LM models (BF16 + KV cache)
+0.6B:  1.2GB weights + 0.6GB KV cache = 1.8GB
+1.7B:  3.4GB weights + 1.0GB KV cache = 4.4GB
+4B:    8.0GB weights + 1.6GB KV cache = 9.6GB
+```
+
+### Tier-Specific Optimizations
+
+<CodeGroup>
+```python Tier 1-2 (≤6GB)
+# Mandatory settings for very low VRAM
+offload_to_cpu=True
+offload_dit_to_cpu=True
+quantization="int8_weight_only"
+compile_model=True
+lm_model=None  # No LM on tier 1-2
+```
+
+```python Tier 3-4 (6-12GB)
+# Balance between speed and VRAM
+offload_to_cpu=True
+offload_dit_to_cpu=True  # Tier 3
+quantization="int8_weight_only"
+lm_model="acestep-5Hz-lm-0.6B"
+lm_backend="pt"  # or "vllm" on tier 4
+```
+
+```python Tier 5-6a (12-20GB)
+# Mid-range GPUs
+offload_to_cpu=True
+offload_dit_to_cpu=False
+quantization="int8_weight_only"
+lm_model="acestep-5Hz-lm-1.7B"
+lm_backend="vllm"
+```
+
+```python Tier 6b / Unlimited (≥20GB)
+# High-end GPUs - no compromises
+offload_to_cpu=False
+offload_dit_to_cpu=False
+quantization=None
+lm_model="acestep-5Hz-lm-4B"
+lm_backend="vllm"
+```
+</CodeGroup>
+
+## Performance Checklist
+
+<Accordion title="Maximize Speed">
+- Use `acestep-v15-turbo` with 8 steps
+- Disable thinking mode
+- Use vLLM backend (NVIDIA GPUs)
+- Disable offload if VRAM allows
+- Enable `torch.compile`
+- Install Flash Attention
+</Accordion>
+
+<Accordion title="Maximize Throughput (Batch Processing)">
+- Use largest batch size your GPU supports
+- Disable LM if metadata not needed
+- Use INT8 quantization to fit larger batches
+- Short durations (30-60s) for faster turnaround
+</Accordion>
+
+<Accordion title="Minimize VRAM Usage">
+- Enable INT8 quantization
+- Enable CPU offload (both VAE and DiT)
+- Use smallest LM model (0.6B) or disable LM
+- Reduce batch size to 1
+- Shorter durations
+</Accordion>
+
+<Accordion title="Maximize Quality">
+- Use `acestep-v15-base` with 24-32 steps
+- Enable thinking mode with all CoT flags
+- Use largest LM model (4B)
+- Disable quantization
+- Higher guidance scale (7-9 for base model)
+</Accordion>

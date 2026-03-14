@@ -1,0 +1,419 @@
+---
+title: 'Benchmarking & Profiling'
+description: 'Measure and optimize ACE-Step 1.5 inference performance'
+---
+
+## Overview
+
+`profile_inference.py` is a comprehensive profiling and benchmarking tool that measures end-to-end wall time, LLM planning time, DiT diffusion time, VAE decoding time, and more across different devices, backends, and configurations.
+
+## Quick Start
+
+<CodeGroup>
+```bash Basic Profile
+# Profile a single generation with default settings
+python profile_inference.py
+```
+
+```bash Profile with Thinking
+# Enable LLM Chain-of-Thought reasoning
+python profile_inference.py --thinking
+```
+
+```bash Benchmark Matrix
+# Run multiple configurations and generate summary table
+python profile_inference.py --mode benchmark
+```
+
+```bash Apple Silicon
+# Profile on MPS with MLX backend
+python profile_inference.py --device mps --lm-backend mlx
+```
+
+```bash Detailed Analysis
+# Enable cProfile for function-level profiling
+python profile_inference.py --detailed --llm-debug
+```
+</CodeGroup>
+
+## Profiling Modes
+
+### Mode 1: profile (Single Run)
+
+Runs a single generation with detailed timing breakdown. Includes optional warmup and cProfile.
+
+```bash
+python profile_inference.py --mode profile
+```
+
+<Accordion title="What it measures">
+- **Total wall time**: End-to-end execution time
+- **LLM planning time**: Token generation, constrained decoding, CFG overhead
+- **DiT diffusion time**: Per-step and total diffusion time
+- **VAE decode time**: Latent-to-audio decoding
+- **Audio save time**: File I/O overhead
+</Accordion>
+
+#### Profile Mode Options
+
+| Flag | Description |
+|------|-------------|
+| `--no-warmup` | Skip warmup run (includes compilation overhead in measurement) |
+| `--detailed` | Enable `cProfile` function-level analysis |
+| `--llm-debug` | Deep LLM debugging (token count, throughput) |
+| `--thinking` | Enable LLM Chain-of-Thought reasoning |
+| `--duration <sec>` | Override audio duration |
+| `--batch-size <n>` | Override batch size |
+| `--inference-steps <n>` | Override diffusion steps |
+
+### Mode 2: benchmark (Configuration Matrix)
+
+Runs a matrix of configurations and produces a summary table. Automatically adapts to GPU memory limits.
+
+```bash
+python profile_inference.py --mode benchmark
+```
+
+**Default matrix:**
+- Durations: 30s, 60s, 120s (clamped by GPU memory)
+- Batch sizes: 1, 2 (clamped by GPU memory)
+- Thinking: True, False (if LLM initialized)
+- Inference steps: 8
+
+#### Example Output
+
+```
+╭─────────────────────────────────────────────────────────────────────────────╮
+│                           BENCHMARK SUMMARY                                 │
+╰─────────────────────────────────────────────────────────────────────────────╯
+
+Duration   Batch   Think   Steps   Wall(s)    LM(s)      DiT(s)     VAE(s)     Status
+────────────────────────────────────────────────────────────────────────────────────
+30         1       False   8       3.21       0.45       1.89       0.52       OK
+30         1       True    8       5.67       2.91       1.89       0.52       OK
+60         2       False   8       8.34       0.48       5.12       1.85       OK
+60         2       True    8       11.21      3.15       5.12       1.85       OK
+120        1       False   8       12.34      0.48       9.12       1.85       OK
+```
+
+#### Save Results to JSON
+
+```bash
+python profile_inference.py --mode benchmark --benchmark-output results.json
+```
+
+### Mode 3: tier-test (Automated GPU Tier Testing)
+
+Automatically test all GPU tiers by simulating different VRAM sizes using `MAX_CUDA_VRAM`.
+
+```bash
+# Test all tiers (4, 6, 8, 12, 16, 24, 48 GB)
+python profile_inference.py --mode tier-test
+
+# Test specific VRAM sizes
+python profile_inference.py --mode tier-test --tiers 6 8 16
+
+# Test with LM enabled (where the tier supports it)
+python profile_inference.py --mode tier-test --tier-with-lm
+
+# Quick test: skip torch.compile for non-quantized tiers
+python profile_inference.py --mode tier-test --tier-skip-compile
+```
+
+<Accordion title="What it validates per tier">
+- Correct tier detection and `GPUConfig` construction
+- Model initialization (DiT, VAE, Text Encoder, optionally LM)
+- A short generation run (30s duration, batch=1) completes without OOM
+- Adaptive VAE decode fallback (GPU → CPU offload → full CPU)
+- VRAM usage stays within the simulated limit
+</Accordion>
+
+#### Example Tier Test Output
+
+```
+╭─────────────────────────────────────────────────────────────────────────────╮
+│                          TIER TEST RESULTS                                  │
+╰─────────────────────────────────────────────────────────────────────────────╯
+
+VRAM    Tier       LM      Duration   Status    Peak VRAM    Notes
+────────────────────────────────────────────────────────────────────
+4GB     tier1      —       30s        ✅ OK     3.8GB        VAE decoded on CPU
+6GB     tier2      —       30s        ✅ OK     5.4GB        Tiled VAE chunk=256
+8GB     tier4      0.6B    30s        ✅ OK     7.2GB        vllm backend
+12GB    tier5      1.7B    30s        ✅ OK     10.8GB       vllm backend
+16GB    tier6a     1.7B    30s        ✅ OK     14.5GB       offload enabled
+24GB    unlimited  4B      30s        ✅ OK     21.3GB       full models on GPU
+```
+
+<Note>
+`tier-test` mode uses `torch.cuda.set_per_process_memory_fraction()` to enforce a hard VRAM cap, making simulations realistic even on high-end GPUs (e.g., A100 80GB).
+</Note>
+
+#### Boundary Testing
+
+Find the minimum VRAM tier at which INT8 quantization and CPU offload can be safely disabled:
+
+```bash
+# Run boundary tests across all tiers
+python profile_inference.py --mode tier-test --tier-boundary
+
+# Boundary test with LM enabled
+python profile_inference.py --mode tier-test --tier-boundary --tier-with-lm
+
+# Save boundary results to JSON
+python profile_inference.py --mode tier-test --tier-boundary --benchmark-output boundary_results.json
+```
+
+**For each tier, tests up to 3 configurations:**
+1. **default**: Tier's standard settings (quantization + offload as configured)
+2. **no-quant**: Quantization disabled, offload unchanged
+3. **no-offload**: No quantization AND no CPU offload (all models on GPU)
+
+The output includes a **Boundary Analysis** summary showing the minimum tier for each capability.
+
+#### Batch Size Boundary Testing
+
+Find the maximum safe batch size for each tier:
+
+```bash
+# Run batch boundary tests
+python profile_inference.py --mode tier-test --tier-batch-boundary --tier-with-lm
+
+# Test specific tiers
+python profile_inference.py --mode tier-test --tier-batch-boundary --tier-with-lm --tiers 8 12 16 24
+```
+
+Progressively tests batch sizes 1, 2, 4, 8 (stopping at first OOM) with both LM-enabled and LM-disabled configurations.
+
+### Mode 4: understand (Audio Understanding)
+
+Profiles the `understand_music()` API which extracts metadata (BPM, key, time signature, caption) from audio codes.
+
+```bash
+python profile_inference.py --mode understand
+python profile_inference.py --mode understand --audio-codes "your_audio_codes_string"
+```
+
+### Mode 5: create_sample (Inspiration Mode)
+
+Profiles the `create_sample()` API which generates a complete song blueprint from a simple text query.
+
+```bash
+python profile_inference.py --mode create_sample
+python profile_inference.py --mode create_sample --sample-query "a soft Bengali love song"
+python profile_inference.py --mode create_sample --instrumental
+```
+
+### Mode 6: format_sample (Metadata Formatting)
+
+Profiles the `format_sample()` API which converts caption + lyrics into structured metadata.
+
+```bash
+python profile_inference.py --mode format_sample
+```
+
+## Device & Backend Configuration
+
+### Device Selection
+
+| Device | Flag | Notes |
+|--------|------|-------|
+| **Auto** | `--device auto` | Automatically selects best available (default) |
+| **CUDA** | `--device cuda` | NVIDIA GPUs (recommended, auto-detected) |
+| **MPS** | `--device mps` | macOS with Apple Silicon |
+| **XPU** | `--device xpu` | Intel Arc GPUs |
+| **CPU** | `--device cpu` | Slow, for testing only |
+
+### LLM Backend Selection
+
+| Backend | Flag | Notes |
+|---------|------|-------|
+| **Auto** | `--lm-backend auto` | Selects best backend for device (default) |
+| **vLLM** | `--lm-backend vllm` | Fastest on CUDA, recommended for NVIDIA |
+| **PyTorch** | `--lm-backend pt` | Universal fallback, works everywhere |
+| **MLX** | `--lm-backend mlx` | Optimized for Apple Silicon |
+
+## Understanding Output
+
+### Time Costs Breakdown
+
+The profiler prints a detailed breakdown of where time is spent:
+
+```
+╭─────────────────────────────────────────────────────────────────────────────╮
+│                        TIME COSTS BREAKDOWN                                 │
+╰─────────────────────────────────────────────────────────────────────────────╯
+
+COMPONENT                          TIME (s)       % of Total
+────────────────────────────────────────────────────────────
+LLM (5Hz Language Model)           2.91           45.2%
+  token_generation                 2.45           38.1%
+  constrained_decoding             0.31            4.8%
+  cfg_overhead                     0.15            2.3%
+
+DiT (Diffusion Transformer)        1.89           29.4%
+  per_step_average                 0.24            —
+  steps                            8               —
+
+VAE Decode                         0.52            8.1%
+Audio Save                         0.12            1.9%
+Overhead (I/O, audio save, etc.)   0.99           15.4%
+
+────────────────────────────────────────────────────────────
+TOTAL WALL TIME                    6.43          100.0%
+```
+
+### Performance Insights
+
+The profiler automatically provides suggestions based on the bottleneck:
+
+<Accordion title="LLM is the bottleneck">
+If LLM time > DiT time × 2:
+
+**Suggestions:**
+1. Run with `--llm-debug` for token-level throughput analysis
+2. Try `--no-constrained-decoding` to reduce FSM overhead
+3. Compare backends: `--lm-backend vllm` vs `pt` vs `mlx`
+4. Reduce `lm_cfg_scale` (currently doubles forward passes if > 1.0)
+</Accordion>
+
+<Accordion title="DiT is the bottleneck">
+If DiT time > LLM time × 2:
+
+**Suggestions:**
+1. Reduce `--inference-steps` (turbo model supports 4-8)
+2. Reduce `--duration`
+3. Try `--quantization int8_weight_only`
+</Accordion>
+
+<Accordion title="Balanced pipeline">
+If LLM time ≈ DiT time:
+
+Pipeline is well-balanced. Further optimization requires hardware upgrades or algorithmic improvements.
+</Accordion>
+
+## Comparing Configurations
+
+### Compare Devices
+
+<CodeGroup>
+```bash NVIDIA GPU
+python profile_inference.py --device cuda --lm-backend vllm
+```
+
+```bash Apple Silicon
+python profile_inference.py --device mps --lm-backend mlx
+```
+
+```bash CPU Baseline
+python profile_inference.py --device cpu --lm-backend pt
+```
+</CodeGroup>
+
+### Compare LLM Models
+
+<CodeGroup>
+```bash Lightweight (0.6B)
+python profile_inference.py --lm-model acestep-5Hz-lm-0.6B
+```
+
+```bash Default (1.7B)
+python profile_inference.py --lm-model acestep-5Hz-lm-1.7B
+```
+
+```bash Large (4B)
+python profile_inference.py --lm-model acestep-5Hz-lm-4B
+```
+</CodeGroup>
+
+### Thinking vs No-Thinking
+
+<CodeGroup>
+```bash Without Thinking (Faster)
+python profile_inference.py --mode benchmark
+```
+
+```bash With Thinking (Better Quality, Slower)
+python profile_inference.py --thinking --use-cot-metas --use-cot-caption
+```
+</CodeGroup>
+
+### Low-VRAM Profiling
+
+```bash
+# Offload + quantization
+python profile_inference.py \
+  --offload-to-cpu \
+  --quantization int8_weight_only \
+  --lm-model acestep-5Hz-lm-0.6B
+```
+
+## Platform-Specific Benchmarks
+
+### NVIDIA GPUs (CUDA)
+
+**Expected performance (RTX 4090, 24GB VRAM):**
+- DiT inference (turbo, 8 steps, 60s): ~5-7s
+- LLM planning (1.7B, no thinking): ~0.5s
+- LLM planning (1.7B, with thinking): ~2-3s
+- VAE decode (60s audio): ~1-2s
+- **Total wall time (no thinking)**: ~7-10s
+- **Total wall time (with thinking)**: ~9-13s
+
+### AMD GPUs (ROCm)
+
+**Expected performance (RX 7900 XTX, 24GB VRAM):**
+- DiT inference: ~10-15% slower than equivalent NVIDIA GPU
+- LLM planning: Similar to NVIDIA
+- **Recommended backend**: `pt` (vLLM has limited ROCm support)
+- **Recommended settings**: Disable `torch.compile` on Windows ROCm
+
+### Apple Silicon (MPS)
+
+**Expected performance (M2 Max, 32GB unified memory):**
+- DiT inference: ~20-30% slower than equivalent NVIDIA GPU
+- LLM planning (MLX backend): Competitive with CUDA
+- **Recommended backend**: `mlx`
+- **Note**: No quantization or offload needed (unified memory)
+
+### Intel XPU (Arc GPUs)
+
+**Expected performance (Arc A770, 16GB VRAM):**
+- DiT inference: ~30-50% slower than equivalent NVIDIA GPU
+- LLM planning: Similar to CPU PyTorch backend
+- **Recommended backend**: `pt`
+- **Note**: `torch.compile` disabled by default
+
+## Best Practices
+
+<Tip>
+**Always include warmup** (default) — The first run includes JIT compilation and memory allocation overhead. Warmup ensures measurements reflect steady-state performance.
+</Tip>
+
+<Tip>
+**Use `--benchmark-output`** to save results as JSON for later analysis or comparison across hardware.
+</Tip>
+
+<Tip>
+**Compare with thinking off vs on** — Thinking mode significantly increases LLM time but may improve generation quality.
+</Tip>
+
+<Tip>
+**Test with representative durations** — Short durations (30s) are dominated by LLM time; long durations (240s+) are dominated by DiT time.
+</Tip>
+
+<Tip>
+**GPU memory auto-adaptation** — The benchmark mode automatically clamps durations and batch sizes to what your GPU can handle, using the adaptive tier system in `acestep/gpu_config.py`.
+</Tip>
+
+<Tip>
+**Use `--detailed` sparingly** — `cProfile` adds overhead; use it only when investigating function-level bottlenecks.
+</Tip>
+
+<Tip>
+**Use `tier-test` for regression testing** — After modifying GPU tier configs, run `--mode tier-test` to verify all tiers still work correctly.
+</Tip>
+
+<Warning>
+**Simulate low VRAM realistically** — When using `MAX_CUDA_VRAM`, the system enforces a hard VRAM cap via `set_per_process_memory_fraction()`, so OOM errors during simulation reflect real behavior on consumer GPUs.
+</Warning>

@@ -1,0 +1,269 @@
+---
+title: CLI Commands
+description: Command-line entry points for ACE-Step 1.5
+icon: terminal
+---
+
+ACE-Step 1.5 provides three CLI entry points for different use cases: launching the Gradio UI, running the REST API server, and downloading models.
+
+## Available Commands
+
+### acestep
+
+Launches the interactive Gradio web UI for ACE-Step 1.5.
+
+<CodeGroup>
+```bash Interactive Wizard
+acestep
+```
+
+```bash With Config File
+acestep --config config.toml
+```
+
+```bash Configure Only
+acestep --configure
+```
+</CodeGroup>
+
+<Note>
+The `acestep` command is defined in `pyproject.toml` as: `acestep.acestep_v15_pipeline:main`
+</Note>
+
+#### When to Use
+- Interactive music generation with visual feedback
+- Exploring different generation tasks and parameters
+- Quick prototyping and experimentation
+- Building and saving configuration files via wizard
+
+#### Wizard Flow
+
+1. **Task Selection** - Choose from 6 generation tasks:
+   - `text2music` - Generate music from text/lyrics
+   - `cover` - Transform existing audio into a new style
+   - `repaint` - Regenerate a specific time segment
+   - `lego` - Generate a specific instrument track in context
+   - `extract` - Isolate a specific instrument track from a mix
+   - `complete` - Complete/extend partial tracks with new instruments
+
+2. **Model Selection** - Select DiT and LM models (auto-downloaded if missing)
+
+3. **Task-Specific Inputs** - Provide source audio, tracks, etc. based on task type
+
+4. **Caption & Lyrics** - Enter music description and lyrics (or choose instrumental/auto-generate)
+
+5. **Advanced Parameters** (optional) - Configure metadata, DiT settings, LM settings, output settings
+
+6. **Review & Generate** - Review summary and confirm generation
+
+7. **Save Configuration** - Optionally save settings to `.toml` file for reuse
+
+<Accordion title="Simple Mode (text2music only)">
+For `text2music` tasks, you can enable Simple Mode to auto-generate both caption and lyrics:
+
+```bash
+acestep
+# Select task: 1 (text2music)
+# Use Simple Mode: y
+# Describe the music: upbeat electronic dance track with heavy bass
+```
+
+The LM will generate appropriate caption and lyrics based on your description.
+</Accordion>
+
+---
+
+### acestep-api
+
+Starts the FastAPI REST API server for programmatic access to ACE-Step 1.5.
+
+<CodeGroup>
+```bash Default Server
+acestep-api
+```
+
+```bash Custom Host and Port
+acestep-api --host 0.0.0.0 --port 8080
+```
+</CodeGroup>
+
+<Note>
+The `acestep-api` command is defined in `pyproject.toml` as: `acestep.api_server:main`
+</Note>
+
+#### When to Use
+- Integrating ACE-Step into applications or workflows
+- Batch processing music generation
+- Building custom UIs or automation scripts
+- Remote inference over HTTP
+
+#### API Features
+
+- **RESTful Interface** - Standard HTTP endpoints for generation
+- **JSON Configuration** - Send generation parameters as JSON
+- **Async Processing** - Non-blocking inference for high throughput
+- **Model Management** - Load/unload models dynamically
+- **Health Checks** - Monitor service status and readiness
+
+<Accordion title="Example API Request">
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/generate",
+    json={
+        "task_type": "text2music",
+        "caption": "energetic rock song with electric guitar",
+        "duration": 30,
+        "batch_size": 1,
+        "seed": 42
+    }
+)
+
+result = response.json()
+```
+</Accordion>
+
+See the [API Reference](/api/rest-endpoints) for complete endpoint documentation.
+
+---
+
+### acestep-download
+
+Downloads and manages ACE-Step models and checkpoints.
+
+<CodeGroup>
+```bash Download Main Model
+acestep-download --model main
+```
+
+```bash Download Specific DiT Model
+acestep-download --model acestep-v15-base
+```
+
+```bash Download LM Model
+acestep-download --model lm
+```
+
+```bash Custom Checkpoint Directory
+acestep-download --model main --checkpoint-dir /path/to/checkpoints
+```
+</CodeGroup>
+
+<Note>
+The `acestep-download` command is defined in `pyproject.toml` as: `acestep.model_downloader:main`
+</Note>
+
+#### When to Use
+- Pre-downloading models before first use
+- Setting up offline environments
+- Managing multiple model versions
+- Troubleshooting missing model errors
+
+#### Available Models
+
+<ParamField path="main" type="string">
+  Core ACE-Step components (DiT encoder, VAE, etc.) + acestep-v15-turbo model
+</ParamField>
+
+<ParamField path="acestep-v15-turbo" type="string">
+  Fast inference model optimized for quick generation (default)
+</ParamField>
+
+<ParamField path="acestep-v15-base" type="string">
+  Base model required for lego, extract, and complete tasks
+</ParamField>
+
+<ParamField path="lm" type="string">
+  Language model for thinking mode, caption enhancement, and lyric generation
+</ParamField>
+
+<Note>
+Models are automatically downloaded when needed if missing. Manual download is optional but recommended for faster startup.
+</Note>
+
+---
+
+## Interactive Configuration Mode
+
+The CLI wizard can be used to create or edit configuration files without running generation:
+
+```bash Create New Config
+acestep --configure
+```
+
+```bash Edit Existing Config
+acestep --configure --config my-config.toml
+```
+
+This is useful for:
+- Building reusable configuration templates
+- Experimenting with parameter combinations
+- Sharing configuration presets with team members
+- Version controlling generation settings
+
+---
+
+## Configuration Files
+
+The wizard saves TOML configuration files containing all generation parameters:
+
+```toml Example config.toml
+task_type = "text2music"
+caption = "upbeat electronic dance music"
+lyrics = "lyrics.txt"
+duration = 60
+batch_size = 2
+inference_steps = 64
+seed = 42
+audio_format = "mp3"
+thinking = true
+```
+
+Reuse saved configurations:
+
+```bash
+acestep --config config.toml
+```
+
+<Accordion title="Configuration File Keys">
+Configuration files map directly to CLI parameters and include:
+
+- **Task Settings**: `task_type`, `instruction`, `src_audio`, `caption`, `lyrics`
+- **Model Settings**: `config_path`, `lm_model_path`, `backend`, `device`
+- **Generation Parameters**: `duration`, `bpm`, `keyscale`, `timesignature`, `inference_steps`, `seed`
+- **DiT Settings**: `guidance_scale`, `use_adg`, `shift`, `infer_method`, `timesteps`
+- **LM Settings**: `thinking`, `lm_temperature`, `lm_cfg_scale`, `use_cot_metas`, `use_cot_caption`, `use_cot_lyrics`
+- **Output Settings**: `save_dir`, `audio_format`, `batch_size`, `use_random_seed`
+- **Performance**: `offload_to_cpu`, `use_flash_attention`
+
+See [CLI Options](/api/cli-options) for complete parameter reference.
+</Accordion>
+
+---
+
+## Prompt Editing with instruction.txt
+
+When `thinking=True` and using a config file, the CLI supports advanced prompt editing:
+
+### Wizard Mode (No Config)
+
+1. CLI writes formatted LM prompt to `instruction.txt`
+2. Execution pauses for manual editing
+3. Press Enter to continue with edited prompt
+
+### Config Mode
+
+1. If `instruction.txt` exists in project root, it's used as the pre-loaded prompt
+2. Bypasses interactive editing step
+3. Allows fine-tuning exact prompt (caption, lyrics, metadata) for LM
+
+```bash
+# Edit instruction.txt before running
+vi instruction.txt
+
+# Run with edited prompt
+acestep --config config.toml
+```
+
+This enables precise control over the LM's audio-token generation prompt.

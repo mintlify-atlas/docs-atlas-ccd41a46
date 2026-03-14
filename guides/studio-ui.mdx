@@ -1,0 +1,217 @@
+---
+title: 'Studio UI Guide'
+description: 'DAW-like interface for structured music generation workflows'
+icon: 'music'
+---
+
+ACE-Step includes an optional, experimental HTML-based Studio UI for users who want a more structured, DAW-like interface for music generation.
+
+<Warning>
+The Studio UI is **experimental** and **frontend-only**. Layout and features may change based on community feedback. The default way to use ACE-Step remains the Gradio Web UI.
+</Warning>
+
+## Overview
+
+The Studio UI provides:
+
+- **DAW-like Interface** - Familiar layout for musicians and producers
+- **REST API Integration** - Talks to the same REST API as other interfaces
+- **No Backend Changes** - Uses the existing ACE-Step API server
+- **Experimental Features** - New workflows and UI patterns
+
+## How to Use
+
+<Steps>
+  <Step title="Start the API Server">
+    Launch the ACE-Step API server:
+    
+    ```bash
+    uv run acestep --enable-api --port 8001
+    ```
+    
+    Or use your usual API launch command:
+    
+    ```bash
+    python -m acestep.api_server --port 8001
+    ```
+  </Step>
+  
+  <Step title="Open Studio UI">
+    Open `ui/studio.html` in a browser:
+    
+    - Double-click the file, or
+    - Use `file:///path/to/ACE-Step-1.5/ui/studio.html`
+  </Step>
+  
+  <Step title="Configure API Base URL">
+    Set the API base URL if needed (default: `http://localhost:8001`)
+  </Step>
+  
+  <Step title="Generate Music">
+    Enter prompt and options, then click **Generate**. The UI will poll for results and display audio when ready.
+  </Step>
+</Steps>
+
+## Features
+
+The Studio UI provides:
+
+<CardGroup cols={2}>
+  <Card title="Project View" icon="folder">
+    Organize your generations into projects and sessions
+  </Card>
+  
+  <Card title="Track Layout" icon="sliders">
+    DAW-like track layout for multi-track workflows
+  </Card>
+  
+  <Card title="Visual Timeline" icon="chart-line">
+    Visual timeline for repaint and lego operations
+  </Card>
+  
+  <Card title="Batch Management" icon="layer-group">
+    Manage multiple generations and variations
+  </Card>
+</CardGroup>
+
+## Scope and Limitations
+
+<Note>
+**Optional**: The default way to use ACE-Step remains the Gradio Web UI.
+
+**No Backend Changes**: This UI uses the existing REST API only.
+
+**Experimental**: Layout and features may change based on community feedback.
+</Note>
+
+### What Studio UI Provides
+
+- Alternative frontend for REST API
+- DAW-like visual layout
+- Project organization features
+- Experimental workflows
+
+### What Studio UI Does NOT Do
+
+- **No new generation features** - All generation happens via the same REST API
+- **No offline mode** - Requires API server to be running
+- **No model management** - Models are managed by the API server
+- **No direct file access** - All files are served through the API
+
+## When to Use Studio UI
+
+<AccordionGroup>
+  <Accordion title="You Prefer DAW-Like Interfaces">
+    If you're familiar with DAWs (Digital Audio Workstations) and prefer their layout and workflow patterns.
+  </Accordion>
+  
+  <Accordion title="Multi-Track Workflows">
+    When working with lego/extract/complete tasks that involve multiple instrument tracks.
+  </Accordion>
+  
+  <Accordion title="Project Organization">
+    When you want to organize generations into projects and sessions.
+  </Accordion>
+  
+  <Accordion title="Experimental Features">
+    When you want to try experimental UI patterns and provide feedback.
+  </Accordion>
+</AccordionGroup>
+
+## When to Use Gradio UI Instead
+
+<AccordionGroup>
+  <Accordion title="Production Workflows">
+    For stable, production-ready workflows, use the Gradio Web UI.
+  </Accordion>
+  
+  <Accordion title="Full Feature Set">
+    The Gradio UI provides the complete, tested feature set including LoRA training.
+  </Accordion>
+  
+  <Accordion title="Official Support">
+    The Gradio UI is the officially supported interface with full documentation.
+  </Accordion>
+  
+  <Accordion title="Server-Side Integration">
+    When running the UI on the same server as the model for better performance.
+  </Accordion>
+</AccordionGroup>
+
+## Comparison: Studio UI vs Gradio UI
+
+| Feature | Studio UI | Gradio UI |
+|---------|-----------|----------|
+| **Interface Style** | DAW-like | Form-based |
+| **Backend** | REST API | Direct Python |
+| **Status** | Experimental | Stable |
+| **LoRA Training** | No | Yes |
+| **Project Organization** | Yes | No |
+| **Track Visualization** | Yes | No |
+| **Official Support** | Experimental | Full |
+| **Documentation** | Basic | Complete |
+
+## Technical Details
+
+### Architecture
+
+```
+┌─────────────┐
+│ Studio UI   │ (Frontend only)
+│ (HTML/JS)   │
+└──────┬──────┘
+       │ HTTP
+       ▼
+┌─────────────┐
+│ REST API    │
+│ (FastAPI)   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ ACE-Step    │
+│ (Models)    │
+└─────────────┘
+```
+
+### API Endpoints Used
+
+- `POST /release_task` - Submit generation task
+- `POST /query_result` - Query task status
+- `GET /v1/audio` - Download audio files
+- `GET /v1/models` - List available models
+- `GET /v1/stats` - Server statistics
+
+## Feedback and Contributions
+
+The Studio UI is experimental and community feedback is welcome:
+
+<CardGroup cols={2}>
+  <Card title="Report Issues" icon="github" href="https://github.com/anomalyco/ACE-Step-1.5/issues">
+    Report bugs or suggest features on GitHub
+  </Card>
+  
+  <Card title="Contribute" icon="code-pull-request" href="https://github.com/anomalyco/ACE-Step-1.5/pulls">
+    Submit pull requests for improvements
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Gradio UI" icon="window" href="/guides/gradio-ui">
+    Learn the official Gradio web interface
+  </Card>
+  
+  <Card title="REST API" icon="server" href="/guides/rest-api">
+    Understand the REST API that powers Studio UI
+  </Card>
+  
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Use ACE-Step programmatically
+  </Card>
+  
+  <Card title="CLI Guide" icon="terminal" href="/guides/cli">
+    Command-line interface for batch processing
+  </Card>
+</CardGroup>

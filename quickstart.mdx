@@ -1,80 +1,133 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get started with ACE-Step 1.5 and generate your first music in under 5 minutes"
 ---
 
-## Get started in three steps
+ACE-Step 1.5 is an open-source music generation model that runs locally on your GPU. This guide will get you from zero to your first generated song in just a few steps.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- **Python 3.11 or 3.12** installed
+- **CUDA-capable GPU** (recommended) - also supports MPS, ROCm, Intel XPU, or CPU
+- **4GB+ VRAM** for basic usage (more VRAM enables larger language models)
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  ROCm on Windows requires Python 3.12 specifically, as AMD officially provides Python 3.12 wheels only.
 </Note>
+
+## Installation
+
+<Steps>
+  <Step title="Install uv package manager">
+    First, install the `uv` package manager:
+
+    <CodeGroup>
+      ```bash macOS / Linux
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      ```
+
+      ```powershell Windows
+      powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Clone and install ACE-Step">
+    Clone the repository and install dependencies:
+
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+    ```
+
+    This will install all required dependencies automatically.
+  </Step>
+
+  <Step title="Launch the Gradio UI">
+    Start the web interface:
+
+    ```bash
+    uv run acestep
+    ```
+
+    Models will auto-download on first run. Open your browser to:
+    
+    **http://localhost:7860**
+
+    <Note>
+      The UI automatically selects the best model configuration for your GPU. All settings (LM model, backend, offloading, quantization) are pre-configured based on your available VRAM.
+    </Note>
+  </Step>
+</Steps>
+
+## Generate Your First Song
+
+Once the Gradio UI is running:
+
+1. **Enter a simple prompt** in the text input field, such as:
+   - "upbeat electronic dance music with strong bass"
+   - "acoustic guitar ballad with emotional vocals"
+   - "jazz piano solo with smooth rhythm"
+
+2. **Click Generate** and wait a few seconds
+
+3. **Listen to your creation** - the audio player will appear with your generated music
+
+That's it! You've just generated professional-quality music locally on your machine.
+
+## What Model Should I Use?
+
+The UI automatically selects the best configuration, but here's what runs based on your GPU:
+
+| Your GPU VRAM | LM Model Used | Notes |
+|---------------|---------------|-------|
+| **≤6GB** | None (DiT only) | LM disabled; uses INT8 quantization + CPU offload |
+| **6-8GB** | `acestep-5Hz-lm-0.6B` | Lightweight LM with PyTorch backend |
+| **8-16GB** | `acestep-5Hz-lm-0.6B` or `1.7B` | 0.6B for 8-12GB, 1.7B for 12-16GB |
+| **16-24GB** | `acestep-5Hz-lm-1.7B` | 4B available on 20GB+ |
+| **≥24GB** | `acestep-5Hz-lm-4B` | Best quality, all models fit without offload |
+
+## Alternative: Launch the REST API
+
+If you prefer programmatic access, launch the REST API server instead:
+
+```bash
+uv run acestep-api
+```
+
+The API will be available at **http://localhost:8001**
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Full installation guide covering AMD/ROCm, Intel GPU, CPU backends, and environment variables
+  </Card>
+  
+  <Card title="Gradio UI Guide" icon="window" href="/guides/gradio-ui">
+    Learn about all features in the web interface including cover generation, repainting, and more
+  </Card>
+  
+  <Card title="Tutorial" icon="book" href="/concepts/design-philosophy">
+    Comprehensive guide to ACE-Step's design philosophy, model architecture, and usage methods
+  </Card>
+  
+  <Card title="GPU Compatibility" icon="microchip" href="/concepts/gpu-compatibility">
+    Detailed GPU compatibility information for different hardware configurations
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Windows Portable Package
+
+Windows users can download a [portable package](https://files.acemusic.ai/acemusic/win/ACE-Step-1.5.7z) with pre-installed dependencies if installation fails.
+
+### Need Help?
+
+- Check the [Installation Guide](/installation) for platform-specific instructions
+- Review [GPU Compatibility](/concepts/gpu-compatibility) for hardware-specific configuration
+- Join the [Discord community](https://discord.gg/PeWDxrkdj7) for support

@@ -1,0 +1,534 @@
+---
+title: 'REST API Guide'
+description: 'Integrate ACE-Step into your applications via HTTP REST API'
+icon: 'server'
+---
+
+The ACE-Step REST API provides HTTP-based asynchronous music generation for integration into web applications, services, and workflows.
+
+## Starting the API Server
+
+<CodeGroup>
+```bash Basic
+python -m acestep.api_server
+```
+
+```bash Custom Host and Port
+python -m acestep.api_server --host 0.0.0.0 --port 8001
+```
+
+```bash With API Key Authentication
+export ACESTEP_API_KEY=your-secret-key
+python -m acestep.api_server
+```
+</CodeGroup>
+
+The server starts at `http://localhost:8001` by default.
+
+## Server Configuration
+
+Configure the API server using environment variables:
+
+### Server Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACESTEP_API_HOST` | `127.0.0.1` | Server bind host |
+| `ACESTEP_API_PORT` | `8001` | Server bind port |
+| `ACESTEP_API_KEY` | (empty) | API authentication key |
+| `ACESTEP_API_WORKERS` | `1` | API worker thread count |
+
+### Model Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACESTEP_CONFIG_PATH` | `acestep-v15-turbo` | Primary DiT model path |
+| `ACESTEP_CONFIG_PATH2` | (empty) | Secondary DiT model (optional) |
+| `ACESTEP_CONFIG_PATH3` | (empty) | Third DiT model (optional) |
+| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-0.6B` | Default 5Hz LM model |
+| `ACESTEP_DEVICE` | `auto` | Device for model loading |
+
+### Queue Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACESTEP_QUEUE_MAXSIZE` | `200` | Maximum queue size |
+| `ACESTEP_QUEUE_WORKERS` | `1` | Number of queue workers |
+| `ACESTEP_AVG_JOB_SECONDS` | `5.0` | Initial average job duration |
+
+## Basic Workflow
+
+<Steps>
+  <Step title="Submit Task">
+    Call `POST /release_task` to submit a generation task and obtain a `task_id`
+  </Step>
+  
+  <Step title="Query Status">
+    Call `POST /query_result` to batch query task status until `status` is `1` (succeeded) or `2` (failed)
+  </Step>
+  
+  <Step title="Download Audio">
+    Download audio files via `GET /v1/audio?path=...` URLs returned in the result
+  </Step>
+</Steps>
+
+## Authentication
+
+The API supports optional API key authentication:
+
+<Tabs>
+  <Tab title="Authorization Header">
+    ```bash
+    curl -X POST http://localhost:8001/release_task \
+      -H 'Authorization: Bearer your-api-key' \
+      -H 'Content-Type: application/json' \
+      -d '{"prompt": "upbeat pop song"}'
+    ```
+  </Tab>
+  
+  <Tab title="Request Body">
+    ```bash
+    curl -X POST http://localhost:8001/release_task \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "ai_token": "your-api-key",
+        "prompt": "upbeat pop song"
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+### Configure API Key
+
+<CodeGroup>
+```bash Environment Variable
+export ACESTEP_API_KEY=your-secret-key
+```
+
+```bash Command Line
+python -m acestep.api_server --api-key your-secret-key
+```
+</CodeGroup>
+
+## Quick Example
+
+Here's a complete workflow using curl:
+
+<CodeGroup>
+```bash Submit Task
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "thinking": true,
+    "inference_steps": 8
+  }'
+
+# Response:
+# {
+#   "data": {
+#     "task_id": "550e8400-e29b-41d4-a716-446655440000",
+#     "status": "queued",
+#     "queue_position": 1
+#   },
+#   "code": 200,
+#   "error": null,
+#   "timestamp": 1700000000000
+# }
+```
+
+```bash Query Result
+curl -X POST http://localhost:8001/query_result \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]
+  }'
+
+# Response:
+# {
+#   "data": [{
+#     "task_id": "550e8400-e29b-41d4-a716-446655440000",
+#     "status": 1,
+#     "result": "[{\"file\":\"/v1/audio?path=...\", ...}]"
+#   }],
+#   "code": 200,
+#   "error": null,
+#   "timestamp": 1700000000000
+# }
+```
+
+```bash Download Audio
+curl "http://localhost:8001/v1/audio?path=%2Ftmp%2Fapi_audio%2Fabc123.mp3" \
+  -o output.mp3
+```
+</CodeGroup>
+
+## Key Endpoints
+
+### POST /release_task
+
+Create a music generation task.
+
+<Accordion title="Request Parameters">
+**Basic Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `prompt` / `caption` | string | `""` | Music description prompt |
+| `lyrics` | string | `""` | Lyrics content |
+| `thinking` | bool | `false` | Use 5Hz LM for audio code generation |
+| `vocal_language` | string | `"en"` | Lyrics language |
+| `audio_format` | string | `"mp3"` | Output format (mp3, wav, flac) |
+
+**Simple Mode Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sample_mode` | bool | `false` | Enable random sample generation |
+| `sample_query` / `description` | string | `""` | Natural language description |
+| `use_format` / `format` | bool | `false` | Use LM to enhance caption/lyrics |
+
+**Music Attributes:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bpm` | int | null | Tempo (30-300) |
+| `key_scale` / `keyscale` | string | `""` | Musical key |
+| `time_signature` / `timesignature` | string | `""` | Time signature |
+| `audio_duration` / `duration` | float | null | Duration in seconds (10-600) |
+
+**Generation Control:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `inference_steps` | int | `8` | Number of inference steps |
+| `guidance_scale` | float | `7.0` | Prompt guidance coefficient |
+| `batch_size` | int | `2` | Number of variations |
+| `seed` | int | `-1` | Random seed |
+| `use_random_seed` | bool | `true` | Use random seed |
+
+See [API Documentation](/api/rest-endpoints) for complete parameter reference.
+</Accordion>
+
+<Accordion title="Response Format">
+```json
+{
+  "data": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000,
+  "extra": null
+}
+```
+</Accordion>
+
+### POST /query_result
+
+Batch query task results.
+
+<Accordion title="Request Parameters">
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `task_id_list` | string (JSON array) or array | List of task IDs to query |
+</Accordion>
+
+<Accordion title="Response Format">
+```json
+{
+  "data": [{
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": 1,
+    "result": "[{\"file\":\"/v1/audio?path=...\", ...}]"
+  }],
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+**Task Status Codes:**
+
+| Status | Description |
+|--------|-------------|
+| `0` | Queued or running |
+| `1` | Succeeded |
+| `2` | Failed |
+</Accordion>
+
+### GET /v1/models
+
+List available DiT models.
+
+<Accordion title="Response Format">
+```json
+{
+  "data": {
+    "models": [
+      {
+        "name": "acestep-v15-turbo",
+        "is_default": true
+      },
+      {
+        "name": "acestep-v15-turbo-shift3",
+        "is_default": false
+      }
+    ],
+    "default_model": "acestep-v15-turbo"
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+</Accordion>
+
+### GET /v1/audio
+
+Download generated audio files.
+
+<Accordion title="Request Parameters">
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | URL-encoded path to the audio file |
+</Accordion>
+
+### GET /v1/stats
+
+Get server runtime statistics.
+
+<Accordion title="Response Format">
+```json
+{
+  "data": {
+    "jobs": {
+      "total": 100,
+      "queued": 5,
+      "running": 1,
+      "succeeded": 90,
+      "failed": 4
+    },
+    "queue_size": 5,
+    "queue_maxsize": 200,
+    "avg_job_seconds": 8.5
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+</Accordion>
+
+### GET /health
+
+Health check endpoint.
+
+<Accordion title="Response Format">
+```json
+{
+  "data": {
+    "status": "ok",
+    "service": "ACE-Step API",
+    "version": "1.0"
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+</Accordion>
+
+## Common Use Cases
+
+### Simple Text-to-Music
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat electronic dance music",
+    "thinking": true,
+    "batch_size": 2
+  }'
+```
+
+### Description-Driven Generation
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sample_query": "a soft Bengali love song for a quiet evening",
+    "thinking": true
+  }'
+```
+
+### Format Enhancement
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "pop rock",
+    "lyrics": "[Verse 1]\nWalking down the street...",
+    "use_format": true,
+    "thinking": true
+  }'
+```
+
+### Select Specific Model
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "electronic dance music",
+    "model": "acestep-v15-turbo",
+    "thinking": true
+  }'
+```
+
+### Custom Timesteps
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "jazz piano trio",
+    "timesteps": "0.97,0.76,0.615,0.5,0.395,0.28,0.18,0.085,0",
+    "thinking": true
+  }'
+```
+
+## Multi-Model Support
+
+Load multiple DiT models and select them per request:
+
+<Steps>
+  <Step title="Configure Models">
+    ```bash
+    export ACESTEP_CONFIG_PATH="acestep-v15-turbo"
+    export ACESTEP_CONFIG_PATH2="acestep-v15-turbo-shift3"
+    export ACESTEP_CONFIG_PATH3="acestep-v15-base"
+    ```
+  </Step>
+  
+  <Step title="Start Server">
+    ```bash
+    python -m acestep.api_server
+    ```
+  </Step>
+  
+  <Step title="List Available Models">
+    ```bash
+    curl http://localhost:8001/v1/models
+    ```
+  </Step>
+  
+  <Step title="Select Model in Request">
+    ```bash
+    curl -X POST http://localhost:8001/release_task \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "model": "acestep-v15-turbo-shift3",
+        "prompt": "upbeat music"
+      }'
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use thinking=true for Best Quality">
+    Enable LM-enhanced generation for best results:
+    
+    ```bash
+    curl -X POST http://localhost:8001/release_task \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "prompt": "upbeat pop song",
+        "thinking": true,
+        "lm_temperature": 0.85
+      }'
+    ```
+  </Accordion>
+  
+  <Accordion title="Batch Query Task Status">
+    Query multiple tasks at once for efficiency:
+    
+    ```bash
+    curl -X POST http://localhost:8001/query_result \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "task_id_list": [
+          "task-id-1",
+          "task-id-2",
+          "task-id-3"
+        ]
+      }'
+    ```
+  </Accordion>
+  
+  <Accordion title="Check Server Load">
+    Use `/v1/stats` to understand server load and average job time:
+    
+    ```bash
+    curl http://localhost:8001/v1/stats
+    ```
+  </Accordion>
+  
+  <Accordion title="Secure Your API">
+    For production, always set `ACESTEP_API_KEY`:
+    
+    ```bash
+    export ACESTEP_API_KEY=your-strong-secret-key
+    python -m acestep.api_server
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+**HTTP Status Codes:**
+
+| Code | Description |
+|------|-------------|
+| `200` | Success |
+| `400` | Invalid request (bad JSON, missing fields) |
+| `401` | Unauthorized (missing or invalid API key) |
+| `404` | Resource not found |
+| `429` | Server busy (queue is full) |
+| `500` | Internal server error |
+
+**Error Response Format:**
+
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API Reference" icon="book" href="/api/rest-endpoints">
+    Complete REST API endpoint documentation
+  </Card>
+  
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Use ACE-Step programmatically in Python
+  </Card>
+  
+  <Card title="CLI Guide" icon="terminal" href="/guides/cli">
+    Command-line interface for batch processing
+  </Card>
+  
+  <Card title="Gradio UI" icon="window" href="/guides/gradio-ui">
+    Web-based interface for interactive generation
+  </Card>
+</CardGroup>

@@ -1,0 +1,623 @@
+---
+title: 'Platform-Specific Guides'
+description: 'Detailed setup and optimization for Windows, Linux, macOS, and Intel XPU'
+---
+
+## Windows (CUDA)
+
+### NVIDIA GPUs on Windows
+
+<Accordion title="Requirements">
+- **OS**: Windows 10/11 (64-bit)
+- **GPU**: NVIDIA GPU with CUDA Compute Capability 7.0+ (GTX 1060+, RTX series)
+- **Driver**: NVIDIA Driver 528.33+
+- **CUDA**: 11.8+ or 12.1+ (bundled with PyTorch)
+- **Python**: 3.11 or 3.12
+</Accordion>
+
+<Accordion title="Installation">
+```bash
+# 1. Install Python 3.11 or 3.12 from python.org
+
+# 2. Install PyTorch with CUDA support
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 3. Install ACE-Step dependencies
+pip install -r requirements.txt
+
+# 4. Verify GPU detection
+python -c "import torch; print(torch.cuda.is_available())"
+```
+</Accordion>
+
+<Accordion title="Launch Scripts">
+**Gradio UI (automatic):**
+```cmd
+start_gradio_ui.bat
+```
+
+**Gradio UI (manual model selection):**
+```cmd
+start_gradio_ui_manual.bat
+```
+
+**API Server:**
+```cmd
+start_api_server.bat
+```
+</Accordion>
+
+<Accordion title="Configuration Tips">
+- **Low VRAM (8-12GB)**: Enable INT8 quantization and CPU offload
+  ```cmd
+  set ACESTEP_QUANTIZATION=int8_weight_only
+  set ACESTEP_OFFLOAD_TO_CPU=true
+  start_gradio_ui.bat
+  ```
+
+- **High VRAM (≥24GB)**: Use full precision and 4B LM model
+  ```cmd
+  set ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-4B
+  start_gradio_ui.bat
+  ```
+
+- **Multi-GPU**: Select GPU with `CUDA_VISIBLE_DEVICES`
+  ```cmd
+  set CUDA_VISIBLE_DEVICES=1
+  start_gradio_ui.bat
+  ```
+</Accordion>
+
+### AMD ROCm on Windows
+
+<Accordion title="Requirements">
+- **OS**: Windows 10/11 (64-bit)
+- **GPU**: AMD RDNA2/RDNA3 (RX 6000/7000/9000 series)
+- **ROCm**: 7.2 (includes HIP SDK)
+- **Python**: 3.11 or 3.12
+</Accordion>
+
+<Accordion title="Installation">
+**Full installation instructions in `requirements-rocm.txt`:**
+
+```cmd
+# 1. Install ROCm SDK wheels (see requirements-rocm.txt for URLs)
+pip install --no-cache-dir [ROCm SDK wheels...]
+
+# 2. Install PyTorch for ROCm
+pip install --no-cache-dir [PyTorch ROCm wheel from requirements-rocm.txt]
+
+# 3. Install dependencies
+pip install -r requirements-rocm.txt
+
+# 4. Verify GPU detection
+python -c "import torch; print(torch.cuda.is_available(), torch.version.hip)"
+```
+</Accordion>
+
+<Accordion title="Launch Scripts">
+**Gradio UI (automatic, sets required env vars):**
+```cmd
+start_gradio_ui_rocm.bat
+```
+
+**API Server:**
+```cmd
+start_api_server_rocm.bat
+```
+
+**What these scripts set:**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=11.0.0  # For RDNA3 (RX 7900 XT/XTX, RX 9070 XT)
+set MIOPEN_FIND_MODE=FAST
+set TORCH_COMPILE_BACKEND=eager
+set ACESTEP_LM_BACKEND=pt
+```
+</Accordion>
+
+<Accordion title="GPU-Specific Environment Variables">
+**RX 7900 XT/XTX, RX 9070 XT:**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=11.0.0
+```
+
+**RX 7800 XT, RX 7700 XT:**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=11.0.1
+```
+
+**RX 7600:**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=11.0.2
+```
+
+**RX 6900 XT (RDNA2):**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=10.3.0
+```
+</Accordion>
+
+<Accordion title="Performance Tips">
+- **Use PyTorch backend for LM**: vLLM has limited ROCm support
+  ```cmd
+  set ACESTEP_LM_BACKEND=pt
+  ```
+
+- **Disable torch.compile on Windows ROCm**: Not fully stable
+  ```cmd
+  set TORCH_COMPILE_BACKEND=eager
+  ```
+
+- **Enable MIOpen fast mode**:
+  ```cmd
+  set MIOPEN_FIND_MODE=FAST
+  ```
+</Accordion>
+
+## Linux (CUDA/ROCm)
+
+### NVIDIA GPUs on Linux
+
+<Accordion title="Requirements">
+- **OS**: Ubuntu 20.04+, Debian 11+, or other modern distro
+- **GPU**: NVIDIA GPU with CUDA Compute Capability 7.0+ (GTX 1060+, RTX series)
+- **Driver**: NVIDIA Driver 525.60.13+
+- **CUDA**: 11.8+ or 12.1+ (bundled with PyTorch)
+- **Python**: 3.11 or 3.12
+</Accordion>
+
+<Accordion title="Installation">
+```bash
+# 1. Install NVIDIA drivers (if not already installed)
+sudo apt update
+sudo apt install nvidia-driver-535  # Or latest version
+
+# 2. Verify driver
+nvidia-smi
+
+# 3. Create virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# 4. Install PyTorch with CUDA
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 5. Install ACE-Step
+pip install -r requirements.txt
+
+# 6. Verify GPU detection
+python -c "import torch; print(torch.cuda.is_available())"
+```
+</Accordion>
+
+<Accordion title="Launch Commands">
+```bash
+# Gradio UI
+python -m acestep.gradio_ui
+
+# API Server
+python -m acestep.api_server
+
+# With custom settings
+python -m acestep.gradio_ui \
+  --lm-model acestep-5Hz-lm-4B \
+  --quantization int8_weight_only \
+  --compile-model
+```
+</Accordion>
+
+<Accordion title="Systemd Service (Optional)">
+Run ACE-Step as a system service:
+
+```ini
+# /etc/systemd/system/acestep.service
+[Unit]
+Description=ACE-Step 1.5 Music Generation API
+After=network.target
+
+[Service]
+Type=simple
+User=acestep
+WorkingDirectory=/home/acestep/ACE-Step-1.5
+Environment="PATH=/home/acestep/ACE-Step-1.5/venv/bin"
+ExecStart=/home/acestep/ACE-Step-1.5/venv/bin/python -m acestep.api_server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable acestep
+sudo systemctl start acestep
+sudo systemctl status acestep
+```
+</Accordion>
+
+### AMD ROCm on Linux
+
+<Accordion title="Requirements">
+- **OS**: Ubuntu 22.04 LTS (recommended) or compatible distro
+- **GPU**: AMD RDNA2/RDNA3 (RX 6000/7000/9000 series)
+- **ROCm**: 6.0+ (6.2+ recommended)
+- **Python**: 3.11 or 3.12
+</Accordion>
+
+<Accordion title="Installation">
+**Detailed guide in `docs/en/ACE-Step1.5-Rocm-Manual-Linux.md`**
+
+```bash
+# 1. Install ROCm (see AMD's official guide for your distro)
+# Example for Ubuntu 22.04:
+wget https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_6.2.60200-1_all.deb
+sudo apt install ./amdgpu-install_6.2.60200-1_all.deb
+sudo amdgpu-install --usecase=rocm
+
+# 2. Verify ROCm installation
+rocm-smi
+
+# 3. Create virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# 4. Install PyTorch with ROCm
+pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
+
+# 5. Install ACE-Step
+pip install -r requirements-rocm-linux.txt
+
+# 6. Set environment variables for your GPU
+export HSA_OVERRIDE_GFX_VERSION=11.0.0  # For RDNA3
+
+# 7. Verify GPU detection
+python -c "import torch; print(torch.cuda.is_available(), torch.version.hip)"
+```
+</Accordion>
+
+<Accordion title="Environment Variables (Add to ~/.bashrc)">
+```bash
+# For RX 7900 XT/XTX, RX 9070 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.0
+
+# For RX 7800 XT, RX 7700 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.1
+
+# For RX 7600
+export HSA_OVERRIDE_GFX_VERSION=11.0.2
+
+# For RX 6900 XT (RDNA2)
+export HSA_OVERRIDE_GFX_VERSION=10.3.0
+
+# Performance optimization
+export MIOPEN_FIND_MODE=FAST
+
+# Use PyTorch backend for LM (vLLM has limited ROCm support)
+export ACESTEP_LM_BACKEND=pt
+```
+</Accordion>
+
+<Accordion title="Launch Commands">
+```bash
+# Ensure env vars are set
+source ~/.bashrc
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Launch Gradio UI
+python -m acestep.gradio_ui
+
+# Launch API Server
+python -m acestep.api_server
+```
+</Accordion>
+
+## macOS (MPS/MLX)
+
+### Apple Silicon (M1/M2/M3/M4)
+
+<Accordion title="Requirements">
+- **OS**: macOS 13.0+ (Ventura or later)
+- **Hardware**: Apple Silicon Mac (M1, M2, M3, M4 series)
+- **Python**: 3.11 or 3.12 (use python.org installer, not Homebrew)
+- **Memory**: 16GB+ recommended (unified memory shared between CPU/GPU)
+</Accordion>
+
+<Accordion title="Installation">
+```bash
+# 1. Install Python 3.11 from python.org
+# Download from: https://www.python.org/downloads/macos/
+
+# 2. Create virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# 3. Install PyTorch with MPS support
+pip install torch torchvision torchaudio
+
+# 4. Install MLX for optimized LM inference
+pip install mlx mlx-lm
+
+# 5. Install ACE-Step
+pip install -r requirements.txt
+
+# 6. Verify MPS availability
+python -c "import torch; print(torch.backends.mps.is_available())"
+```
+</Accordion>
+
+<Accordion title="Launch Commands">
+```bash
+# Gradio UI (auto-detects MPS and MLX)
+python -m acestep.gradio_ui
+
+# With explicit MPS and MLX backend
+python -m acestep.gradio_ui \
+  --device mps \
+  --lm-backend mlx \
+  --lm-model acestep-5Hz-lm-4B
+```
+</Accordion>
+
+<Accordion title="macOS-Specific Optimizations">
+ACE-Step automatically applies these optimizations on macOS:
+
+- **No CPU offloading**: Unified memory architecture makes offloading pointless
+- **No quantization**: INT8 quantization not supported on MPS
+- **No torch.compile**: Not fully supported on MPS
+- **MLX backend for LM**: Native Apple Silicon acceleration
+- **Adaptive memory management**: Uses `torch.mps.recommended_max_memory()`
+
+<Note>
+You don't need to set these manually — the system detects macOS and applies them automatically.
+</Note>
+</Accordion>
+
+<Accordion title="Performance Expectations">
+**M2 Max (32GB unified memory):**
+- DiT inference (turbo, 8 steps, 60s): ~10-15s
+- LLM planning (4B, MLX backend): ~1-2s
+- Total wall time: ~12-18s
+
+**M1 Max (32GB unified memory):**
+- DiT inference: ~15-20s
+- LLM planning (4B, MLX backend): ~2-3s
+- Total wall time: ~18-25s
+
+<Tip>
+MLX provides significant speedup for LM inference compared to PyTorch on MPS. Always use `--lm-backend mlx` on Apple Silicon.
+</Tip>
+</Accordion>
+
+## Intel XPU (Arc GPUs)
+
+### Arc A770, A750, A580, A380
+
+<Accordion title="Requirements">
+- **OS**: Windows 10/11 (64-bit)
+- **GPU**: Intel Arc A-series GPU (A770, A750, A580, A380) or Intel integrated graphics
+- **Drivers**: Latest Intel GPU drivers from Intel website
+- **Python**: 3.11 (recommended for best compatibility)
+- **Disk Space**: ~5-10GB for dependencies
+</Accordion>
+
+<Accordion title="Quick Start (Automatic Setup)">
+```cmd
+# 1. Run the setup script
+setup_xpu.bat
+
+# 2. Wait for installation (takes a few minutes)
+
+# 3. Launch Gradio UI
+start_gradio_ui_xpu.bat
+
+# 4. Open browser to http://127.0.0.1:7860
+```
+</Accordion>
+
+<Accordion title="Manual Setup">
+```cmd
+# 1. Create virtual environment
+python -m venv venv_xpu
+
+# 2. Activate it
+call venv_xpu\Scripts\activate
+
+# 3. Upgrade pip
+python -m pip install --upgrade pip
+
+# 4. Install XPU dependencies
+pip install -r requirements-xpu.txt
+
+# 5. Launch
+start_gradio_ui_xpu.bat
+```
+</Accordion>
+
+<Accordion title="XPU Environment Variables">
+The batch files automatically set these performance optimizations:
+
+```cmd
+set SYCL_CACHE_PERSISTENT=1
+set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
+set PYTORCH_DEVICE=xpu
+set TORCH_COMPILE_BACKEND=eager
+```
+
+These settings improve XPU performance and are based on verified working configurations.
+</Accordion>
+
+<Accordion title="Launch Scripts">
+| Script | Description |
+|--------|-------------|
+| `setup_xpu.bat` | One-command environment setup |
+| `start_gradio_ui_xpu.bat` | Launch Gradio web UI (automatic) |
+| `start_gradio_ui_xpu_manual.bat` | Launch Gradio UI with model selection |
+| `start_api_server_xpu.bat` | Launch REST API server |
+</Accordion>
+
+<Accordion title="Model Configuration">
+Models should be placed in the `checkpoints` folder.
+
+**Default Models:**
+- **DiT Model**: `acestep-v15-turbo` (fast generation)
+- **LM Model**: `acestep-5Hz-lm-4B` (best quality, uses CPU offload)
+
+**Launch Options:**
+
+1. **Automatic** (uses defaults):
+   ```cmd
+   start_gradio_ui_xpu.bat
+   ```
+
+2. **Manual** (choose models interactively):
+   ```cmd
+   start_gradio_ui_xpu_manual.bat
+   ```
+</Accordion>
+
+<Accordion title="Troubleshooting">
+**"venv_xpu not found":**
+```cmd
+setup_xpu.bat
+```
+
+**"Intel XPU not detected":**
+```cmd
+# 1. Check GPU drivers are up to date
+
+# 2. Verify PyTorch XPU installation
+call venv_xpu\Scripts\activate
+python -c "import torch; print(torch.xpu.is_available())"
+```
+
+**"torch.xpu.is_available() returns False":**
+```cmd
+call venv_xpu\Scripts\activate
+pip uninstall torch torchaudio torchvision
+pip install --pre torch torchaudio torchvision --index-url https://download.pytorch.org/whl/nightly/xpu
+```
+
+**Out of memory errors:**
+- Use a smaller LM model (0.6B or 1.7B instead of 4B)
+- Enable CPU offload in the UI
+- Close other GPU-intensive applications
+</Accordion>
+
+<Accordion title="Performance Notes">
+- **First launch** takes longer as models are initialized
+- **CPU offload** is recommended for 4B LM on GPUs with ≤16GB VRAM
+- **torch.compile** is disabled (not fully supported on XPU yet)
+- **Python 3.11** is recommended for best compatibility
+
+**Expected performance (Arc A770, 16GB VRAM):**
+- DiT inference: ~30-50% slower than equivalent NVIDIA GPU
+- LLM planning: Similar to CPU PyTorch backend
+</Accordion>
+
+## CPU-Only Mode
+
+### Running Without a GPU
+
+<Accordion title="When to Use">
+- No GPU available
+- Testing/development
+- Very long duration generation where speed is not critical
+</Accordion>
+
+<Accordion title="Installation">
+```bash
+# Standard PyTorch installation (CPU-only)
+pip install torch torchvision torchaudio
+pip install -r requirements.txt
+```
+</Accordion>
+
+<Accordion title="Launch Commands">
+```bash
+# Gradio UI
+python -m acestep.gradio_ui --device cpu
+
+# With minimal LM model for faster inference
+python -m acestep.gradio_ui \
+  --device cpu \
+  --lm-backend pt \
+  --lm-model acestep-5Hz-lm-0.6B \
+  --batch-size 1
+```
+</Accordion>
+
+<Accordion title="Performance Expectations">
+**CPU-only generation (30s audio, 8 steps):**
+- DiT inference: ~5-10 minutes (vs ~5-10s on GPU)
+- LLM planning: ~30-60s (vs ~1-3s on GPU)
+- VAE decode: ~30-60s (vs ~1-2s on GPU)
+- **Total**: ~6-12 minutes
+
+<Warning>
+CPU-only mode is 50-100x slower than GPU inference. Only use for testing or when GPU is unavailable.
+</Warning>
+</Accordion>
+
+## Docker Deployment
+
+<Accordion title="NVIDIA GPUs (CUDA)">
+```dockerfile
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y python3.11 python3-pip
+WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install torch --index-url https://download.pytorch.org/whl/cu121
+RUN pip3 install -r requirements.txt
+
+COPY . .
+CMD ["python3", "-m", "acestep.api_server"]
+```
+
+```bash
+# Build
+docker build -t acestep:cuda .
+
+# Run with GPU access
+docker run --gpus all -p 7860:7860 acestep:cuda
+```
+</Accordion>
+
+<Accordion title="CPU-Only">
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install torch torchvision torchaudio
+RUN pip install -r requirements.txt
+
+COPY . .
+CMD ["python", "-m", "acestep.api_server", "--device", "cpu"]
+```
+
+```bash
+# Build
+docker build -t acestep:cpu .
+
+# Run
+docker run -p 7860:7860 acestep:cpu
+```
+</Accordion>
+
+## Platform Comparison
+
+| Platform | Setup Difficulty | Performance | LM Backend | Quantization | Offload |
+|----------|------------------|-------------|------------|--------------|----------|
+| **Windows (CUDA)** | Easy | Excellent | vLLM | ✅ | ✅ |
+| **Windows (ROCm)** | Medium | Good | pt | ✅ | ✅ |
+| **Linux (CUDA)** | Easy | Excellent | vLLM | ✅ | ✅ |
+| **Linux (ROCm)** | Medium | Good | pt | ✅ | ✅ |
+| **macOS (MPS)** | Easy | Good | mlx | ❌ | ❌ |
+| **Intel XPU** | Medium | Fair | pt | ❌ | ✅ |
+| **CPU-only** | Very Easy | Poor | pt | ❌ | N/A |
+
+<Tip>
+For best performance, use Linux with NVIDIA GPU and vLLM backend. For Apple Silicon, use MLX backend for competitive LM performance.
+</Tip>

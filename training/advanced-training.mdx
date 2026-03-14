@@ -1,0 +1,506 @@
+---
+title: "Advanced Training with Side-Step"
+description: "Explore advanced training techniques including Side-Step toolkit, LoKR adapters, gradient sensitivity analysis, and VRAM optimization"
+---
+
+## Overview
+
+For users who want more control over LoRA training, the community-developed **[Side-Step](https://github.com/koda-dernet/Side-Step)** toolkit provides advanced features:
+
+- **Corrected timestep sampling** — Continuous logit-normal distribution (matches base model pre-training)
+- **LoKR adapters** — 10x faster training with Kronecker factorization
+- **Gradient sensitivity analysis** — Identify which modules to target for training
+- **CLI-based workflows** — Automated training pipelines
+- **VRAM optimization** — Multiple strategies for low-memory GPUs
+- **CFG dropout** — 15% dropout for better prompt adherence
+
+<Note>
+  Side-Step is bundled in the ACE-Step repository under `docs/sidestep/`. For the standalone version with more frequent updates, visit [github.com/koda-dernet/Side-Step](https://github.com/koda-dernet/Side-Step).
+</Note>
+
+## Why Use Side-Step?
+
+### Corrected vs Vanilla Training
+
+ACE-Step's built-in trainer uses a **discrete 8-step timestep schedule** from the turbo model inference path. Side-Step's corrected mode uses **continuous timestep sampling** that matches how the base model was originally trained.
+
+| Feature | Vanilla (Built-in) | Corrected (Side-Step) |
+|---------|-------------------|----------------------|
+| **Timestep sampling** | Discrete 8-step schedule | Continuous logit-normal |
+| **CFG dropout** | None | 15% (teaches prompt handling) |
+| **Training speed** | Baseline | Same as vanilla |
+| **Use case** | Reproducing old results | Recommended for new training |
+| **Requirements** | Base ACE-Step | Standalone (no base needed) |
+
+The discrete schedule samples from:
+```python
+[1.0, 0.9545, 0.9, 0.8333, 0.75, 0.6429, 0.5, 0.3]
+```
+
+The continuous schedule samples from the full [0, 1] range using logit-normal distribution, matching the base model's training distribution.
+
+<Warning>
+  Vanilla mode is provided for backward compatibility. Use **corrected mode** for new projects.
+</Warning>
+
+## LoKR: 10x Faster Training
+
+### What is LoKR?
+
+LoKR (Low-Rank Kronecker) uses Kronecker product factorization instead of simple low-rank decomposition:
+
+```python
+# LoRA decomposition
+W_lora = B @ A  # B is (d x r), A is (r x d)
+
+# LoKR decomposition  
+W_lokr = (B2 ⊗ B1) @ (A2 ⊗ A1)  # Kronecker products
+```
+
+This factorization is **10x faster** to train while maintaining similar quality:
+- **Before**: 1 hour on RTX 3090
+- **After**: ~5 minutes on RTX 3090
+
+### LoKR vs LoRA
+
+| Aspect | LoRA | LoKR |
+|--------|------|------|
+| **Library** | PEFT | LyCORIS |
+| **Stability** | Well-tested | Experimental |
+| **Training speed** | Baseline | **10x faster** |
+| **Rank parameter** | `r` | `linear_dim` |
+| **Scaling parameter** | `alpha` | `linear_alpha` |
+| **Support** | Wide ecosystem | Limited |
+| **Factorization** | Low-rank AB | Kronecker ⊗ |
+
+### Training with LoKR
+
+<CodeGroup>
+```bash Gradio UI
+# 1. Go to "Train LoKr" tab (not "Train LoRA")
+# 2. Load preprocessed tensors
+# 3. Configure parameters (defaults work well)
+# 4. Start training
+```
+
+```bash Command Line (Side-Step)
+uv run python train.py fixed \
+  --checkpoint-dir ./checkpoints \
+  --model-variant base \
+  --adapter-type lokr \
+  --dataset-dir ./preprocessed_tensors \
+  --output-dir ./output/my_lokr \
+  --epochs 100 \
+  --linear-dim 64 \
+  --linear-alpha 128
+```
+</CodeGroup>
+
+<Warning>
+  LoKR is experimental. If you encounter issues during training or inference, fall back to standard LoRA.
+</Warning>
+
+## Side-Step Toolkit
+
+Side-Step provides a complete CLI-based training workflow with interactive wizards and presets.
+
+### Installation
+
+Side-Step is already included in ACE-Step 1.5. Access it via `train.py`:
+
+```bash
+# Interactive wizard (recommended for first use)
+uv run python train.py
+
+# Direct CLI commands
+uv run python train.py fixed --help
+uv run python train.py estimate --help
+```
+
+### Training Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `fixed` | Corrected training (continuous timesteps + CFG dropout) | **Recommended** for all new training |
+| `vanilla` | Original ACE-Step behavior (discrete timesteps) | Reproducing old results |
+| `estimate` | Gradient sensitivity analysis (no training) | Identifying target modules |
+
+### Interactive Wizard
+
+The easiest way to use Side-Step:
+
+```bash
+uv run python train.py
+```
+
+Wizard features:
+- **Main menu**: Preprocess, train LoRA, train LoKR, estimate gradients, manage presets
+- **Go-back navigation**: Type `b` at any prompt to return
+- **Preset management**: Save and load configurations
+- **Flow chaining**: Automatically offers to train after preprocessing
+- **Session loop**: Wizard stays open for multiple operations
+
+<Steps>
+  <Step title="Launch wizard">
+    Run `uv run python train.py` and select action from main menu
+  </Step>
+  
+  <Step title="Choose adapter type">
+    Select LoRA (stable) or LoKR (experimental, 10x faster)
+  </Step>
+  
+  <Step title="Select training mode">
+    Choose Corrected (recommended) or Vanilla (backward compatibility)
+  </Step>
+  
+  <Step title="Pick model">
+    Interactive fuzzy-searchable model selector
+  </Step>
+  
+  <Step title="Configure hyperparameters">
+    Basic mode (good defaults) or Advanced mode (full control)
+  </Step>
+  
+  <Step title="Start training">
+    Review summary and confirm to begin
+  </Step>
+</Steps>
+
+## Gradient Sensitivity Analysis
+
+Identify which DiT decoder modules are most sensitive to your dataset:
+
+```bash
+uv run python train.py estimate \
+  --checkpoint-dir ./checkpoints \
+  --model-variant base \
+  --dataset-dir ./preprocessed_tensors \
+  --estimate-batches 5 \
+  --top-k 16 \
+  --granularity module
+```
+
+### Output Example
+
+```
+============================================================
+  Top-16 Modules by Gradient Sensitivity
+============================================================
+  1. blocks.23.attn.q_proj                   0.024531
+  2. blocks.23.attn.k_proj                   0.023891
+  3. blocks.22.attn.v_proj                   0.022104
+  4. blocks.22.attn.o_proj                   0.021847
+  ...
+============================================================
+```
+
+### Using Estimation Results
+
+Target high-sensitivity modules in your LoRA config:
+
+```python
+from acestep.training.configs import LoRAConfig
+
+config = LoRAConfig(
+    r=64,
+    alpha=128,
+    target_modules=[
+        "blocks.23.attn.q_proj",
+        "blocks.23.attn.k_proj",
+        "blocks.22.attn.v_proj",
+        "blocks.22.attn.o_proj",
+    ]
+)
+```
+
+This focused approach:
+- Reduces trainable parameters
+- Saves VRAM
+- May improve training efficiency
+- Requires careful evaluation
+
+## VRAM Optimization Strategies
+
+Side-Step implements multiple VRAM optimization layers:
+
+### 1. Gradient Checkpointing (Automatic)
+
+**VRAM savings**: 40-60% reduction in activation memory (~10-15 GB)
+
+**Trade-off**: 10-30% slower training (recomputation cost)
+
+**Enable**: On by default. Disable with `--no-gradient-checkpointing`
+
+### 2. Flash Attention 2 (Automatic)
+
+**VRAM savings**: Reduces attention memory from O(N²) to O(N)
+
+**Speed benefit**: 10-30% faster on supported GPUs
+
+**Requirements**: NVIDIA Ampere or newer (RTX 30xx/40xx, A100, H100)
+
+**Fallback**: Auto-falls back to SDPA on older GPUs
+
+### 3. 8-bit Optimizer (Optional)
+
+**VRAM savings**: ~30% reduction in optimizer state (~2-3 GB for rank-64 LoRA)
+
+**Enable**:
+```bash
+uv run python train.py fixed --optimizer-type adamw8bit ...
+```
+
+### 4. Encoder Offloading (Optional)
+
+**VRAM savings**: 2-4 GB (moves VAE/text encoder to CPU after setup)
+
+**Trade-off**: Minimal (not used during training loop)
+
+**Enable**:
+```bash
+uv run python train.py fixed --offload-encoder ...
+```
+
+### 5. Lower Rank
+
+**VRAM savings**: Proportional to rank reduction (rank 16 uses ~4x less than rank 64)
+
+**Trade-off**: Lower capacity for style capture
+
+### 6. Gradient Accumulation
+
+**VRAM savings**: Keeps batch-size-1 memory while achieving larger effective batch
+
+**Default**: 4 accumulation steps (effective batch = 4)
+
+```bash
+uv run python train.py fixed --gradient-accumulation 8 ...
+```
+
+### VRAM Profiles
+
+| GPU VRAM | Configuration |
+|----------|---------------|
+| **24 GB+** | Batch 2+, AdamW, Rank 64-128, No offloading |
+| **16-24 GB** | Batch 1, AdamW, Rank 64, Grad accumulation 4 |
+| **10-16 GB** | Batch 1, **AdamW8bit**, Encoder offload, Rank 32-64 |
+| **&lt;10 GB** | Batch 1, **Adafactor**, Encoder offload, Rank 16, High grad accumulation |
+
+<Note>
+  Gradient checkpointing and Flash Attention are always enabled when supported. Profiles differ in optimizer, rank, and optional offloading.
+</Note>
+
+## Advanced Training Configurations
+
+### Custom Training Script
+
+<CodeGroup>
+```python Python API
+from acestep.training.trainer import LoRATrainer
+from acestep.training.configs import LoRAConfig, TrainingConfig
+from acestep.training.data_module import PreprocessedDataModule
+
+# Configure LoRA
+lora_config = LoRAConfig(
+    r=64,
+    alpha=128,
+    dropout=0.1,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"]
+)
+
+# Configure training
+training_config = TrainingConfig(
+    learning_rate=1e-4,
+    batch_size=1,
+    gradient_accumulation_steps=4,
+    max_epochs=500,
+    save_every_n_epochs=50,
+    gradient_checkpointing=True,
+    output_dir="./lora_output"
+)
+
+# Load data
+data_module = PreprocessedDataModule(
+    dataset_dir="./preprocessed_tensors",
+    batch_size=training_config.batch_size,
+    num_workers=4
+)
+
+# Train
+trainer = LoRATrainer(
+    checkpoint_dir="./checkpoints",
+    model_variant="turbo",
+    lora_config=lora_config,
+    training_config=training_config
+)
+
+trainer.train(data_module)
+```
+
+```bash Advanced CLI
+uv run python train.py fixed \
+  --checkpoint-dir ./checkpoints \
+  --model-variant base \
+  --dataset-dir ./preprocessed_tensors \
+  --output-dir ./output/advanced \
+  --epochs 500 \
+  --batch-size 1 \
+  --gradient-accumulation 4 \
+  --lr 1e-4 \
+  --rank 64 \
+  --alpha 128 \
+  --dropout 0.1 \
+  --optimizer-type adamw8bit \
+  --scheduler-type cosine \
+  --warmup-steps 100 \
+  --weight-decay 0.01 \
+  --max-grad-norm 1.0 \
+  --gradient-checkpointing \
+  --offload-encoder \
+  --save-every 50 \
+  --seed 42
+```
+</CodeGroup>
+
+### Training on Fine-Tunes
+
+Train LoRA on top of a fine-tuned base model:
+
+```bash
+uv run python train.py fixed \
+  --checkpoint-dir ./checkpoints \
+  --model-variant my-custom-finetune \
+  --base-model base \
+  --dataset-dir ./preprocessed_tensors \
+  --output-dir ./output/finetune_lora
+```
+
+The `--base-model` flag tells Side-Step which base architecture your fine-tune is built on.
+
+## Troubleshooting Advanced Training
+
+<AccordionGroup>
+  <Accordion title="LoKR training crashes">
+    **Symptom**: Training fails with LyCORIS errors
+    
+    **Solutions**:
+    - Fall back to standard LoRA (more stable)
+    - Check LyCORIS library version: `pip show lycoris-lora`
+    - Try reducing `linear_dim` (64 → 32)
+    - Disable advanced LoKR features (`--no-tucker`, `--no-weight-decompose`)
+  </Accordion>
+  
+  <Accordion title="Flash Attention not detected">
+    **Symptom**: Training falls back to SDPA
+    
+    **Check GPU compute capability**:
+    ```python
+    import torch
+    print(torch.cuda.get_device_capability())  # Should be >= (8, 0)
+    ```
+    
+    **Verify installation**:
+    ```bash
+    pip show flash-attn
+    ```
+    
+    Flash Attention 2 requires Ampere or newer (RTX 30xx+, A100+).
+  </Accordion>
+  
+  <Accordion title="Gradient estimation OOM">
+    **Reduce batch count**:
+    ```bash
+    uv run python train.py estimate --estimate-batches 3 ...
+    ```
+    
+    **Use gradient checkpointing**:
+    ```bash
+    uv run python train.py estimate --gradient-checkpointing ...
+    ```
+    
+    **Offload encoder**:
+    ```bash
+    uv run python train.py estimate --offload-encoder ...
+    ```
+  </Accordion>
+  
+  <Accordion title="Custom target modules not working">
+    **Verify module names**:
+    ```python
+    from transformers import AutoModel
+    model = AutoModel.from_pretrained("./checkpoints/acestep-v15-base")
+    for name, _ in model.named_modules():
+        print(name)
+    ```
+    
+    **Use estimation** to find valid targets:
+    ```bash
+    uv run python train.py estimate --granularity module ...
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Side-Step Documentation
+
+Complete Side-Step documentation is bundled in `docs/sidestep/`:
+
+| Topic | File |
+|-------|------|
+| **Getting Started** | [Getting Started.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Getting%20Started.md) |
+| **End-to-End Tutorial** | [End-to-End Tutorial.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/End-to-End%20Tutorial.md) |
+| **Dataset Preparation** | [Dataset Preparation.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Dataset%20Preparation.md) |
+| **Training Guide** | [Training Guide.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Training%20Guide.md) |
+| **Using Your Adapter** | [Using Your Adapter.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Using%20Your%20Adapter.md) |
+| **VRAM Optimization** | [VRAM Optimization Guide.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/VRAM%20Optimization%20Guide.md) |
+| **Estimation Guide** | [Estimation Guide.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Estimation%20Guide.md) |
+| **Shift and Timestep** | [Shift and Timestep Sampling.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Shift%20and%20Timestep%20Sampling.md) |
+| **Preset Management** | [Preset Management.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Preset%20Management.md) |
+| **Settings Wizard** | [The Settings Wizard.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/The%20Settings%20Wizard.md) |
+| **Model Management** | [Model Management.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Model%20Management.md) |
+| **Windows Notes** | [Windows Notes.md](https://github.com/koda-dernet/Side-Step/blob/main/docs/Windows%20Notes.md) |
+
+<Note>
+  For the standalone Side-Step toolkit with the latest features, visit [github.com/koda-dernet/Side-Step](https://github.com/koda-dernet/Side-Step).
+</Note>
+
+## Best Practices for Advanced Training
+
+### Corrected Mode
+- **Always use for new projects** — Continuous timesteps match base model training
+- **CFG dropout** improves prompt adherence and unprompted generation
+- **Standalone** — No need to install base ACE-Step alongside
+
+### LoKR Adapters
+- **Start with LoRA** for stability, then try LoKR for speed
+- **10x speedup** is ideal for rapid iteration on consumer GPUs
+- **Experimental** — Report issues to Side-Step repository
+
+### Gradient Sensitivity
+- **Use estimation** to identify dataset-specific target modules
+- **Targeted training** can reduce VRAM and improve efficiency
+- **Evaluate carefully** — Broader targets may generalize better
+
+### VRAM Optimization
+- **Enable everything** if VRAM-constrained: checkpointing, 8-bit optimizer, offloading
+- **Start conservative** (rank 16-32) and scale up if VRAM allows
+- **Monitor usage** with `nvidia-smi` during training
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Training Workflow" icon="gears" href="/training/training-workflow">
+    Complete training workflow with Gradio and CLI
+  </Card>
+  
+  <Card title="Dataset Preparation" icon="database" href="/training/dataset-preparation">
+    Prepare audio, lyrics, and annotations
+  </Card>
+  
+  <Card title="LoRA Overview" icon="book" href="/training/lora-overview">
+    Understand LoRA fundamentals
+  </Card>
+  
+  <Card title="Side-Step Repository" icon="github" href="https://github.com/koda-dernet/Side-Step">
+    Visit standalone Side-Step toolkit
+  </Card>
+</CardGroup>

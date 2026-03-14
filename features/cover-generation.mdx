@@ -1,0 +1,347 @@
+---
+title: Cover Generation
+description: Transform existing audio while maintaining structure but changing style and timbre
+---
+
+## Overview
+
+Cover generation allows you to **transform existing audio** while maintaining its structure (melody, rhythm, chords) but changing style, timbre, and production details. It's like creating a new interpretation of the same song.
+
+The cover task uses `GenerationParams` with `task_type="cover"` and requires `src_audio` as input.
+
+<Note>
+Cover generation is available in **all model variants**: turbo, SFT, and base.
+</Note>
+
+## How Cover Works
+
+<Steps>
+  <Step title="Audio to Semantic Codes">
+    Your source audio is converted into **semantic codes** by the VAE encoder. These codes contain:
+    - Melody (note direction and pitch)
+    - Rhythm (beat, accent, groove)
+    - Chords (harmonic progression)
+    - Orchestration (instrument arrangement)
+    - Some timbre information
+  </Step>
+  
+  <Step title="Semantic Guidance">
+    The semantic codes guide the DiT generation process:
+    - They act as a **structural blueprint**
+    - Your new caption/lyrics describe the target style
+    - `audio_cover_strength` controls how strictly to follow the blueprint
+  </Step>
+  
+  <Step title="Style Transformation">
+    DiT generates new audio that:
+    - Maintains the core structure from source audio
+    - Applies the style/timbre from your caption
+    - Creates a fresh interpretation
+  </Step>
+</Steps>
+
+## Key Parameters
+
+### Source Audio
+
+**Required:** Path to the audio file you want to transform.
+
+```python
+from acestep.inference import GenerationParams
+
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original_song.mp3",  # Required
+    caption="orchestral symphonic arrangement with strings and brass",
+)
+```
+
+### audio_cover_strength
+
+Controls how much influence the source audio has on generation.
+
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| `1.0` | **Strong adherence** to original structure | Faithful covers, keep melody exact |
+| `0.7-0.8` | **Balanced** transformation | Style changes while preserving feel |
+| `0.5` | **Moderate** freedom | Significant reinterpretation |
+| `0.1-0.3` | **Loose** interpretation | Style transfer, use as inspiration only |
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="pop_song.mp3",
+    caption="jazz piano trio version",
+    audio_cover_strength=0.8,  # Keep structure, change style
+)
+```
+
+<Tip>
+**Start with 0.8** for faithful covers. Lower it if you want more creative freedom.
+</Tip>
+
+## Use Cases
+
+### 1. Genre Transformation
+
+Change the genre while keeping the song structure:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="edm_track.mp3",
+    caption="acoustic folk version with guitar, soft vocals, warm intimate atmosphere",
+    audio_cover_strength=0.7,
+)
+```
+
+### 2. Instrumentation Change
+
+Swap instruments while maintaining melody:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="piano_ballad.mp3",
+    caption="orchestral arrangement with strings, brass, powerful cinematic feel",
+    audio_cover_strength=0.9,  # High fidelity to original
+)
+```
+
+### 3. Vocal Style Change
+
+Change vocal characteristics while keeping lyrics:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="male_vocal_song.mp3",
+    caption="female breathy vocal version, intimate bedroom pop production",
+    lyrics="""[Verse 1]
+Same lyrics as original
+...""",  # Optional: provide lyrics to maintain structure
+    audio_cover_strength=0.75,
+)
+```
+
+### 4. Style Transfer
+
+Use source audio as inspiration for a new style:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="classical_piece.mp3",
+    caption="synthwave electronic version with retro 80s synths, heavy bass",
+    audio_cover_strength=0.3,  # Loose interpretation
+)
+```
+
+## Advanced: Remix and Reinterpretation
+
+You can **change both caption and lyrics** to create entirely new interpretations:
+
+<CodeGroup>
+```python Style Remix
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original.mp3",
+    # Change style while keeping structure
+    caption="heavy metal version with distorted guitars, aggressive drums, powerful vocals",
+    # Keep original lyrics or modify them
+    lyrics="""[Verse 1]
+Original lyrics here...
+""",
+    audio_cover_strength=0.6,
+)
+```
+
+```python Emotional Reinterpretation
+params = GenerationParams(
+    task_type="cover",
+    src_audio="upbeat_song.mp3",
+    # Change mood completely
+    caption="melancholic piano ballad, slow tempo, emotional female vocal",
+    # Adjust structure tags to match new mood
+    lyrics="""[Intro - somber]
+
+[Verse 1 - intimate]
+Same lyrics, different emotion
+...
+""",
+    audio_cover_strength=0.5,  # Allow significant reinterpretation
+)
+```
+</CodeGroup>
+
+## Understanding Coverage vs. Freedom
+
+The `audio_cover_strength` parameter creates a spectrum:
+
+<CardGroup cols={2}>
+  <Card title="High Strength (0.8-1.0)" icon="link">
+    **Maintains:**
+    - Exact melody contours
+    - Rhythmic patterns
+    - Chord progressions
+    - Song structure
+    
+    **Changes:**
+    - Instruments
+    - Timbre/tone
+    - Production style
+    - Vocal character
+  </Card>
+  
+  <Card title="Low Strength (0.1-0.4)" icon="wand-magic-sparkles">
+    **Maintains:**
+    - General vibe/feel
+    - Approximate structure
+    - Rough harmonic ideas
+    
+    **Changes:**
+    - Melody details
+    - Rhythm variations
+    - Chord substitutions
+    - Complete reharmonization
+  </Card>
+</CardGroup>
+
+## Combining with LM Thinking
+
+Cover generation **skips LM** by default because it uses source audio codes directly. However, you can still use LM for metadata enhancement:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="source.mp3",
+    caption="jazz version",
+    thinking=True,  # LM won't generate codes, but can enhance metadata
+    use_cot_metas=True,  # Auto-infer BPM, key from context
+    use_cot_caption=True,  # Expand "jazz version" into detailed description
+)
+```
+
+<Warning>
+LM is **not used** to generate audio codes in cover mode - codes come directly from `src_audio`. The LM only helps with metadata and caption enhancement.
+</Warning>
+
+## Complete Examples
+
+### Example 1: Faithful Orchestral Cover
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="cover",
+    src_audio="pop_song.mp3",
+    caption="orchestral symphonic arrangement with full strings section, brass, and timpani, cinematic epic feel",
+    audio_cover_strength=0.9,  # Stay very close to original
+    thinking=False,  # Direct DiT generation
+)
+
+config = GenerationConfig(
+    batch_size=2,  # Generate 2 variations
+    audio_format="flac",
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+### Example 2: Creative Reinterpretation
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="acoustic_ballad.mp3",
+    caption="electronic synthwave version with retro 80s synths, drum machines, vocoder vocals",
+    audio_cover_strength=0.4,  # Allow creative freedom
+    thinking=True,
+    use_cot_caption=True,  # Let LM expand the description
+)
+
+config = GenerationConfig(
+    batch_size=4,  # Generate multiple interpretations
+    use_random_seed=True,  # Explore variations
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+### Example 3: Genre Fusion
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="classical_piano.mp3",
+    caption="lo-fi hip-hop remix with vinyl crackle, jazzy drums, warm bass, relaxed chill vibe",
+    audio_cover_strength=0.6,
+    bpm=85,  # Slow it down for lo-fi feel
+    thinking=False,
+)
+
+config = GenerationConfig(
+    batch_size=2,
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+## Tips for Better Covers
+
+<CardGroup cols={2}>
+  <Card title="Match Style Coherence" icon="link">
+    If source is fast rock, transforming to slow ballad needs lower strength (0.3-0.5) to allow tempo/rhythm changes
+  </Card>
+  
+  <Card title="Start High, Go Lower" icon="arrow-down">
+    Begin with strength 0.8, listen, then lower if you want more creative freedom
+  </Card>
+  
+  <Card title="Batch Generate" icon="layer-group">
+    Use `batch_size=4-8` to explore variations with different seeds at same strength
+  </Card>
+  
+  <Card title="Caption Specificity" icon="crosshairs">
+    Detailed captions ("acoustic folk with fingerpicked guitar, harmonica") work better than vague ("folk version")
+  </Card>
+  
+  <Card title="Maintain Consistency" icon="equals">
+    Keep caption and lyrics consistent with each other to avoid confusing the model
+  </Card>
+  
+  <Card title="Reference Audio Quality" icon="star">
+    Higher quality source audio (clean, well-mixed) produces better covers
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Cover sounds too similar to original
+
+**Solution:** Lower `audio_cover_strength` to 0.3-0.5
+
+### Cover loses the melody completely
+
+**Solution:** Increase `audio_cover_strength` to 0.7-0.9
+
+### Style change not working
+
+**Solution:** 
+- Make caption more specific and detailed
+- Lower `audio_cover_strength` to allow more freedom
+- Check caption/lyrics consistency
+
+### Results vary too much between generations
+
+**Solution:** 
+- Set `use_random_seed=False` and provide fixed `seed`
+- Increase `audio_cover_strength` for more consistent structure
+
+## Related Features
+
+- **[Text-to-Music](/features/text-to-music)** - Generate original music from scratch
+- **[Audio Editing](/features/audio-editing)** - Edit specific sections of audio
+- **[Multi-Track](/features/multi-track)** - Add new layers to covers
+- **[Metadata Control](/features/metadata-control)** - Fine-tune BPM, key, and duration

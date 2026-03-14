@@ -1,0 +1,214 @@
+---
+title: REST API Overview
+description: Introduction to the ACE-Step 1.5 REST API for asynchronous music generation
+---
+
+# REST API Overview
+
+The ACE-Step REST API provides an HTTP-based asynchronous music generation service that allows you to create high-quality music from text descriptions, lyrics, and audio references.
+
+## Starting the API Server
+
+Start the REST API server using the `acestep-api` command:
+
+```bash
+# Start with default settings
+acestep-api
+
+# Start on custom host and port
+acestep-api --host 0.0.0.0 --port 8080
+
+# Start with API key authentication
+export ACESTEP_API_KEY=your-secret-key
+acestep-api
+```
+
+Alternatively, use Python module syntax:
+
+```bash
+python -m acestep.api_server --host 127.0.0.1 --port 8001
+```
+
+## Base URL and Default Port
+
+The API server runs on:
+- **Default Host**: `127.0.0.1` (localhost)
+- **Default Port**: `8001`
+- **Base URL**: `http://localhost:8001`
+
+Configure using environment variables:
+
+```bash
+export ACESTEP_API_HOST=0.0.0.0
+export ACESTEP_API_PORT=8080
+```
+
+## Unified Response Format
+
+All API endpoints return responses in a consistent wrapper format:
+
+```json
+{
+  "data": { /* actual response data */ },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000,
+  "extra": null
+}
+```
+
+<ResponseField name="data" type="any">
+  The actual response data. Content varies by endpoint.
+</ResponseField>
+
+<ResponseField name="code" type="integer">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="error" type="string | null">
+  Error message if request failed, `null` on success
+</ResponseField>
+
+<ResponseField name="timestamp" type="integer">
+  Response timestamp in milliseconds (Unix epoch)
+</ResponseField>
+
+<ResponseField name="extra" type="any | null">
+  Additional metadata (usually `null`)
+</ResponseField>
+
+## Task Workflow
+
+The REST API uses an asynchronous task-based workflow:
+
+### 1. Create a Generation Task
+
+Submit a music generation request to receive a `task_id`:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song with guitar",
+    "lyrics": "Hello world",
+    "thinking": true
+  }'
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+### 2. Poll Task Status
+
+Periodically query the task status until completion:
+
+```bash
+curl -X POST http://localhost:8001/query_result \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]}'
+```
+
+### 3. Download Audio Files
+
+Once `status` is `1` (succeeded), download audio using the file URLs from the result:
+
+```bash
+curl "http://localhost:8001/v1/audio?path=%2Ftmp%2Fapi_audio%2Fabc123.mp3" -o output.mp3
+```
+
+## Task Status Codes
+
+Task status is represented by integer codes:
+
+| Status | Name | Description |
+|--------|------|-------------|
+| `0` | queued/running | Task is queued or currently generating |
+| `1` | succeeded | Generation completed successfully |
+| `2` | failed | Generation failed with error |
+
+## Quick Start Example
+
+Here's a complete workflow example:
+
+```bash
+# Step 1: Create task
+TASK_RESPONSE=$(curl -s -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "energetic rock song",
+    "thinking": true,
+    "inference_steps": 8
+  }')
+
+TASK_ID=$(echo $TASK_RESPONSE | jq -r '.data.task_id')
+echo "Created task: $TASK_ID"
+
+# Step 2: Poll until complete
+while true; do
+  RESULT=$(curl -s -X POST http://localhost:8001/query_result \
+    -H 'Content-Type: application/json' \
+    -d "{\"task_id_list\": [\"$TASK_ID\"]}")
+  
+  STATUS=$(echo $RESULT | jq -r '.data[0].status')
+  
+  if [ "$STATUS" == "1" ]; then
+    echo "Task completed!"
+    break
+  elif [ "$STATUS" == "2" ]; then
+    echo "Task failed"
+    exit 1
+  fi
+  
+  echo "Status: $STATUS (waiting...)"
+  sleep 2
+done
+
+# Step 3: Extract and download audio URL
+FILE_URL=$(echo $RESULT | jq -r '.data[0].result' | jq -r '.[0].file')
+curl "http://localhost:8001$FILE_URL" -o generated_music.mp3
+echo "Downloaded to generated_music.mp3"
+```
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+| Code | Meaning |
+|------|----------|
+| `200` | Success |
+| `400` | Bad request (invalid JSON, missing fields) |
+| `401` | Unauthorized (missing or invalid API key) |
+| `404` | Resource not found |
+| `415` | Unsupported Content-Type |
+| `429` | Server busy (queue is full) |
+| `500` | Internal server error |
+
+<Note>
+  For production deployments, always set `ACESTEP_API_KEY` to enable authentication and secure your API endpoint.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/api/rest-authentication">
+    Learn how to authenticate API requests
+  </Card>
+  <Card title="Endpoints" icon="code" href="/api/rest-endpoints">
+    Explore all available API endpoints
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/api/rest-examples">
+    See complete usage examples
+  </Card>
+</CardGroup>

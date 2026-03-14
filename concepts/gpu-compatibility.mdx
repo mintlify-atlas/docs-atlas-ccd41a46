@@ -1,0 +1,487 @@
+---
+title: 'GPU Compatibility'
+description: 'Complete guide to hardware support, VRAM requirements, and platform-specific optimizations'
+---
+
+## Supported Hardware Platforms
+
+ACE-Step 1.5 supports a wide range of hardware platforms with automatic optimization:
+
+<CardGroup cols={2}>
+  <Card title="NVIDIA CUDA" icon="microchip">
+    **Primary platform** with full feature support
+    
+    - CUDA 12.8 (Windows, Linux x86_64)
+    - CUDA 13.0 (Linux aarch64)
+    - Flash Attention auto-detection
+    - INT8 quantization support
+    - vLLM backend optimization
+  </Card>
+  
+  <Card title="AMD ROCm" icon="microchip">
+    **Full compatibility** on supported GPUs
+    
+    - ROCm 6.0+ recommended
+    - Windows requires Python 3.12
+    - Automatic backend selection
+    - Performance comparable to CUDA
+  </Card>
+  
+  <Card title="Intel XPU" icon="microchip">
+    **Intel Arc and Data Center GPUs**
+    
+    - Arc A-series graphics
+    - Data Center GPU Max
+    - Automatic device detection
+    - Optimized math kernels
+  </Card>
+  
+  <Card title="Apple Silicon (MPS/MLX)" icon="apple">
+    **Native Apple Silicon acceleration**
+    
+    - M1, M2, M3, M4 series
+    - MLX backend for maximum efficiency
+    - Unified memory architecture
+    - macOS-optimized inference
+  </Card>
+</CardGroup>
+
+<Note>
+  **CPU-Only Mode**: ACE-Step 1.5 runs on CPU-only systems, though significantly slower. All features remain functional.
+</Note>
+
+## VRAM Tier System
+
+ACE-Step 1.5 automatically adapts to your GPU's VRAM, configuring generation limits, model availability, offloading strategies, and UI defaults.
+
+### Complete Tier Configuration
+
+| VRAM | Tier | LM Models | Backend | Max Duration | Max Batch | Offload | Quantization |
+|------|------|-----------|---------|--------------|-----------|---------|-------------|
+| ≤4GB | Tier 1 | None | pt | 4-6 min | 1 | CPU + DiT | INT8 |
+| 4-6GB | Tier 2 | None | pt | 8-10 min | 1 | CPU + DiT | INT8 |
+| 6-8GB | Tier 3 | 0.6B | pt | 8-10 min | 2 | CPU + DiT | INT8 |
+| 8-12GB | Tier 4 | 0.6B | vllm | 8-10 min | 2-4 | CPU + DiT | INT8 |
+| 12-16GB | Tier 5 | 0.6B, 1.7B | vllm | 8-10 min | 4 | CPU | INT8 |
+| 16-20GB | Tier 6a | 0.6B, 1.7B | vllm | 8-10 min | 4-8 | CPU | INT8 |
+| 20-24GB | Tier 6b | 0.6B, 1.7B, 4B | vllm | 8 min | 8 | None | None |
+| ≥24GB | Unlimited | All (0.6B, 1.7B, 4B) | vllm | 10 min | 8 | None | None |
+
+### Tier Specifications Explained
+
+<Accordion title="LM Models">
+  Which 5Hz Language Model sizes can be loaded on this tier:
+  - **None**: LM disabled, DiT-only mode
+  - **0.6B**: Lightweight 600M parameter model
+  - **1.7B**: Balanced 1.7B parameter model (default recommendation)
+  - **4B**: Maximum quality 4B parameter model
+</Accordion>
+
+<Accordion title="Backend">
+  LM inference backend selection:
+  - **pt**: PyTorch native backend (low-VRAM fallback)
+  - **vllm**: Optimized vLLM backend (NVIDIA GPUs with sufficient VRAM)
+  - **mlx**: Apple Silicon native acceleration (macOS only)
+</Accordion>
+
+<Accordion title="Offload Strategy">
+  Memory management approach:
+  - **CPU + DiT**: All models offloaded to CPU when not in use; DiT also offloaded between diffusion steps
+  - **CPU**: VAE and Text Encoder offloaded to CPU; DiT stays on GPU
+  - **None**: All models remain on GPU (no offloading overhead)
+</Accordion>
+
+<Accordion title="Quantization">
+  Whether INT8 weight quantization is enabled by default:
+  - **INT8**: Reduces VRAM usage by ~50% with minimal quality impact
+  - **None**: Full precision weights (sufficient VRAM available)
+</Accordion>
+
+## Tier-Specific Recommendations
+
+### Tier 1: ≤4GB VRAM
+
+**Target Hardware**: GTX 1050 Ti, GTX 1650, integrated graphics
+
+<Card title="Configuration" icon="microchip">
+  - **DiT-only mode** (no LM initialization)
+  - INT8 quantization mandatory
+  - Full CPU offload (all models)
+  - DiT offloaded between diffusion steps
+  - VAE decode may fall back to CPU
+</Card>
+
+**Limitations:**
+- Max duration: 4-6 minutes (no LM / LM modes)
+- Batch size: 1 only
+- No Chain-of-Thought metadata inference
+- Slower inference due to offloading
+
+**Best Practices:**
+- Manually specify metadata (BPM, key, duration)
+- Use Cover mode with reference audio instead of LM planning
+- Generate shorter clips and stitch together
+- Consider CPU-only inference if GPU overhead isn't worth it
+
+### Tier 2: 4-6GB VRAM
+
+**Target Hardware**: GTX 1060 6GB, GTX 1660, RTX 3050 4GB
+
+<Card title="Configuration" icon="microchip">
+  - **DiT-only mode** (no LM by default)
+  - INT8 quantization mandatory
+  - Full CPU offload
+  - Extended duration support vs Tier 1
+</Card>
+
+**Capabilities:**
+- Max duration: 8-10 minutes
+- Batch size: 1
+- Can attempt 0.6B LM with manual override (risky)
+
+### Tier 3: 6-8GB VRAM
+
+**Target Hardware**: GTX 1070, GTX 1660 Ti, RTX 3050 8GB, RTX 2060
+
+<Card title="Configuration" icon="microchip">
+  - **0.6B LM supported** (PyTorch backend)
+  - INT8 quantization + CPU offload
+  - Chain-of-Thought capabilities enabled
+</Card>
+
+**Capabilities:**
+- Max duration: 8-10 minutes
+- Batch size: 2
+- Full LM features (metadata inference, query rewriting)
+- Automatic scoring available
+
+**Recommendations:**
+- Default configuration works well for most tasks
+- Consider disabling LM for maximum DiT batch size
+- Use `pt` backend (vLLM KV cache too memory-hungry)
+
+### Tier 4: 8-12GB VRAM
+
+**Target Hardware**: GTX 1080 Ti, RTX 2070, RTX 3060 12GB, RTX 4060 Ti
+
+<Card title="Configuration" icon="microchip">
+  - **0.6B LM** with vLLM backend
+  - INT8 quantization + CPU offload
+  - Improved inference efficiency
+</Card>
+
+**Capabilities:**
+- Max duration: 8-10 minutes
+- Batch size: 2-4 (LM / no LM)
+- vLLM backend provides faster LM inference
+
+**Recommendations:**
+- Sweet spot for entry-level creative work
+- Batch generation becomes practical
+- Consider 1.7B LM with manual override on 12GB
+
+### Tier 5: 12-16GB VRAM
+
+**Target Hardware**: RTX 3060 12GB, RTX 2080 Ti, RTX 3070 Ti, RTX 4060 Ti 16GB
+
+<Card title="Configuration" icon="microchip">
+  - **1.7B LM recommended** (default)
+  - vLLM backend
+  - CPU offload (not DiT offload)
+  - INT8 quantization
+</Card>
+
+**Capabilities:**
+- Max duration: 8-10 minutes
+- Batch size: 4
+- Significantly better LM quality vs 0.6B
+- Medium composition complexity supported
+
+**Recommendations:**
+- Excellent balance for most users
+- 1.7B LM provides good world knowledge
+- Batch=4 enables efficient exploration
+
+### Tier 6a: 16-20GB VRAM
+
+**Target Hardware**: RTX 3080, RTX 3080 Ti, RTX 4070 Ti
+
+<Card title="Configuration" icon="microchip">
+  - **1.7B LM** (4B possible with trade-offs)
+  - vLLM backend
+  - CPU offload for VAE/encoder only
+  - INT8 quantization
+</Card>
+
+**Capabilities:**
+- Max duration: 8-10 minutes
+- Batch size: 4-8 (LM / no LM)
+- Higher batch enables better exploration
+
+**Recommendations:**
+- Consider experimenting with 4B LM
+- Try disabling quantization for quality comparison
+- Batch=8 for extensive variation generation
+
+### Tier 6b: 20-24GB VRAM
+
+**Target Hardware**: RTX 3090, RTX 3090 Ti, RTX 4080, RTX 4090 (partial)
+
+<Card title="Configuration" icon="microchip">
+  - **4B LM available** (1.7B recommended default)
+  - vLLM backend
+  - **No CPU offload needed**
+  - **No quantization needed**
+</Card>
+
+**Capabilities:**
+- Max duration: 8 minutes (with LM)
+- Batch size: 8
+- Full precision inference
+- Best LM quality available
+
+**Recommendations:**
+- Use 4B LM for complex compositions
+- Maximum quality mode unlocked
+- No performance overhead from offloading
+
+### Unlimited Tier: ≥24GB VRAM
+
+**Target Hardware**: RTX 4090 24GB, RTX A6000, A100, H100
+
+<Card title="Configuration" icon="microchip">
+  - **All models supported** (4B LM recommended)
+  - vLLM backend
+  - No offload or quantization
+  - Maximum generation limits
+</Card>
+
+**Capabilities:**
+- Max duration: 10 minutes
+- Batch size: 8
+- All features at maximum quality
+- No memory constraints
+
+**Recommendations:**
+- Professional creative workflows
+- LoRA training supported (12GB minimum)
+- Multiple model loading possible
+- Maximum exploration with AutoGen + Batch=8
+
+## Platform-Specific Optimizations
+
+### NVIDIA CUDA
+
+<Steps>
+  <Step title="Flash Attention">
+    Automatically enabled when supported (Ampere/Ada architecture). Provides significant speedup for LM inference.
+  </Step>
+  
+  <Step title="vLLM Backend">
+    Optimized inference engine for LM models on GPUs with ≥8GB VRAM. PagedAttention for efficient KV cache management.
+  </Step>
+  
+  <Step title="INT8 Quantization">
+    Powered by `torchao` - reduces VRAM by ~50% with minimal quality impact. Requires `torch.compile`.
+  </Step>
+  
+  <Step title="Adaptive VAE Decode">
+    Three-tier fallback: GPU tiled → GPU with CPU offload → Full CPU decode. Chunk size adapts to free VRAM.
+  </Step>
+</Steps>
+
+### AMD ROCm
+
+<Note>
+  **Windows Users**: ROCm on Windows requires Python 3.12 (AMD officially provides Python 3.12 wheels only)
+</Note>
+
+- Full feature parity with CUDA
+- Automatic ROCm device detection
+- Same tier configuration applies
+- Use ROCm-specific launch scripts: `start_gradio_ui_rocm.bat`
+
+### Intel XPU
+
+- Intel Arc A-series graphics cards supported
+- Data Center GPU Max supported
+- Automatic SYCL backend selection
+- Performance varies by specific GPU model
+
+### Apple Silicon (MPS/MLX)
+
+**Unified Memory Architecture Benefits:**
+
+- No explicit VRAM limit (shares system RAM)
+- Efficient memory sharing between CPU/GPU
+- MLX backend provides native acceleration
+- Automatic offloading handled by system
+
+**Model Support:**
+
+- DiT models: Full support via MPS backend
+- LM models: MLX-optimized backend (`mlx-lm`)
+- VAE: Optimized MLX implementation available
+
+**Platform-Specific:**
+
+```bash
+# macOS launch script
+chmod +x start_gradio_ui_macos.sh
+./start_gradio_ui_macos.sh
+```
+
+## Runtime Safety Features
+
+ACE-Step 1.5 includes multiple safety mechanisms:
+
+### VRAM Guard
+
+<Card title="Pre-Inference Estimation" icon="shield">
+  Before each inference, the system:
+  - Estimates VRAM requirements
+  - Checks available free memory
+  - Automatically reduces batch size if needed
+  - Warns user of adjustments
+</Card>
+
+### Adaptive VAE Decode
+
+Automatic fallback strategy:
+
+```
+1. GPU tiled decode (fastest, most memory)
+   ↓ (if OOM)
+2. GPU decode with CPU offload (medium speed/memory)
+   ↓ (if OOM)
+3. Full CPU decode (slowest, no VRAM required)
+```
+
+Chunk sizes auto-adjust: 64 / 128 / 256 / 512 / 1024 / 1536 based on available memory.
+
+### Duration/Batch Clamping
+
+<Warning>
+  If you request values exceeding your tier's limits, they are automatically clamped with a warning message:
+  
+  "Duration reduced from 15 minutes to 10 minutes based on GPU tier"
+</Warning>
+
+### Constrained Decoding
+
+When LM is initialized, duration generation is constrained to GPU tier's maximum, preventing OOM errors during Chain-of-Thought generation.
+
+## Memory Optimization Tips
+
+### Very Low VRAM (≤6GB)
+
+<Steps>
+  <Step title="Use DiT-Only Mode">
+    Disable LM initialization to maximize VRAM for DiT generation
+  </Step>
+  
+  <Step title="Accept Mandatory Settings">
+    INT8 quantization and full CPU offload are required
+  </Step>
+  
+  <Step title="Expect CPU Fallback">
+    VAE decode will likely fall back to CPU automatically
+  </Step>
+  
+  <Step title="Generate Shorter Clips">
+    Work with shorter durations and stitch results together
+  </Step>
+</Steps>
+
+### Low VRAM (6-8GB)
+
+- Use 0.6B LM with `pt` backend
+- Keep offload enabled
+- Batch size 2 is practical
+- Consider selective LM usage (enable only when needed)
+
+### Medium VRAM (8-16GB)
+
+- Upgrade to 1.7B LM on 12GB+
+- Enable vLLM backend for efficiency
+- Batch size 2-4 works well
+- Quantization still recommended
+
+### High VRAM (16-24GB)
+
+- Experiment with 4B LM on 20GB+
+- Try disabling quantization for quality comparison
+- Batch size 4-8 for extensive exploration
+- Offload can be disabled on 20GB+
+
+### Very High VRAM (≥24GB)
+
+- Use 4B LM for best quality
+- Disable all quantization and offload
+- Maximum batch size (8) with AutoGen
+- Consider loading multiple models
+- LoRA training supported
+
+## Debugging & Testing
+
+### Simulating Different Tiers
+
+For testing, simulate different GPU memory sizes:
+
+```bash
+# Simulate 4GB GPU (Tier 1)
+MAX_CUDA_VRAM=4 uv run acestep
+
+# Simulate 8GB GPU (Tier 4)
+MAX_CUDA_VRAM=8 uv run acestep
+
+# Simulate 16GB GPU (Tier 6a)
+MAX_CUDA_VRAM=16 uv run acestep
+```
+
+Sets `torch.cuda.set_per_process_memory_fraction()` to enforce hard VRAM cap.
+
+### Automated Tier Testing
+
+```bash
+# Test all tiers automatically
+python profile_inference.py --mode tier-test
+
+# Test specific tiers
+python profile_inference.py --mode tier-test --tiers 6 8 16
+
+# Test with LM enabled
+python profile_inference.py --mode tier-test --tier-with-lm
+
+# Boundary testing (find minimum tier for capabilities)
+python profile_inference.py --mode tier-test --tier-boundary
+
+# Batch size boundary testing
+python profile_inference.py --mode tier-test --tier-batch-boundary --tier-with-lm
+```
+
+See [Benchmark Guide](/advanced/benchmarking) for full profiling documentation.
+
+## Community Contributions
+
+<Card title="Help Improve Configurations" icon="users">
+  The GPU tier configurations are based on testing across common hardware. If your device performs differently than these parameters suggest:
+  
+  - Conduct thorough testing on your hardware
+  - Document actual performance (duration, batch size)
+  - Submit a PR to optimize `acestep/gpu_config.py`
+  
+  **Your contributions help improve the experience for all users!**
+</Card>
+
+## Summary
+
+**Automatic Configuration**: ACE-Step 1.5 automatically detects your GPU and selects optimal settings.
+
+**Wide Hardware Support**: From 4GB entry-level GPUs to 80GB data center cards, plus AMD, Intel, Apple Silicon, and CPU-only.
+
+**Intelligent Adaptation**: Runtime safety features prevent OOM errors and automatically optimize for your hardware.
+
+**Manual Override**: Advanced users can override defaults via command-line arguments or Gradio UI settings.
+
+**Platform Optimizations**: Native acceleration for CUDA, ROCm, XPU, MPS, and MLX backends.

@@ -1,0 +1,435 @@
+---
+title: Multi-Track Generation
+description: Add instrument layers and create multi-track compositions with Lego task
+---
+
+## Overview
+
+The **Lego task** enables multi-track music generation by letting you add specific instrument tracks to existing audio. It's like Suno Studio's "Add Layer" feature - you can iteratively build up a full arrangement by adding one instrument at a time.
+
+<Warning>
+Lego is **only available in the base model** (`acestep-v15-base`).
+</Warning>
+
+## How Lego Works
+
+<Steps>
+  <Step title="Analyze Context">
+    The model analyzes your existing audio (backing track or partial arrangement) to understand:
+    - Current harmonic progression
+    - Rhythmic patterns and tempo
+    - Overall style and feel
+    - Existing instrumentation
+  </Step>
+  
+  <Step title="Generate New Track">
+    Based on your instruction and caption, generates a new track that:
+    - Harmonizes with existing audio
+    - Coordinates rhythmically
+    - Matches the production style
+    - Fills the specified instrumental role
+  </Step>
+  
+  <Step title="Mix Output">
+    Returns the new track mixed with the original audio (or can return isolated track)
+  </Step>
+</Steps>
+
+## Key Parameters
+
+### Basic Lego Generation
+
+```python
+from acestep.inference import GenerationParams
+
+params = GenerationParams(
+    task_type="lego",
+    src_audio="backing_track.mp3",
+    instruction="Generate the guitar track based on the audio context:",  # Specify track
+    caption="lead guitar melody with bluesy feel, expressive bends",
+    repainting_start=0.0,  # Start of region to generate
+    repainting_end=-1,     # -1 = end of file
+)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `src_audio` | Path to existing audio/backing track (required) |
+| `instruction` | Specify which track to generate (required) |
+| `caption` | Characteristics and style of the new track |
+| `repainting_start` | Start time for generation (0.0 = beginning) |
+| `repainting_end` | End time for generation (-1 = end of file) |
+
+<Tip>
+The `instruction` parameter **must specify which track type** to generate. Use:
+`"Generate the {TRACK_NAME} track based on the audio context:"`
+</Tip>
+
+## Available Track Types
+
+You can generate any of these track types:
+
+<CardGroup cols={3}>
+  <Card title="Rhythm Section">
+    - **drums** - Full drum kit
+    - **percussion** - Shakers, tambourine, etc.
+    - **bass** - Bass guitar or synth bass
+  </Card>
+  
+  <Card title="Melodic Instruments">
+    - **guitar** - Electric or acoustic
+    - **keyboard** - Piano, organ, etc.
+    - **strings** - Violin, cello section
+    - **brass** - Trumpet, trombone
+    - **woodwinds** - Flute, saxophone
+    - **synth** - Synthesizer leads/pads
+  </Card>
+  
+  <Card title="Vocals & FX">
+    - **vocals** - Lead vocals
+    - **backing_vocals** - Harmonies
+    - **fx** - Sound effects, atmospheres
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+### 1. Building Arrangements Layer by Layer
+
+Start with a simple foundation and add complexity:
+
+<Steps>
+  <Step title="Start with Drums & Bass">
+    ```python
+    # Generate initial drums
+    params = GenerationParams(
+        task_type="text2music",
+        caption="driving rock drums, powerful kick and snare",
+        lyrics="[Instrumental]",
+        duration=60,
+    )
+    # Save as drums.mp3
+    ```
+  </Step>
+  
+  <Step title="Add Bass">
+    ```python
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="drums.mp3",
+        instruction="Generate the bass track based on the audio context:",
+        caption="rock bass guitar, following drum groove, punchy tone",
+    )
+    # Save as drums_bass.mp3
+    ```
+  </Step>
+  
+  <Step title="Add Guitar">
+    ```python
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="drums_bass.mp3",
+        instruction="Generate the guitar track based on the audio context:",
+        caption="distorted electric guitar, power chords, rhythmic",
+    )
+    # Save as full_backing.mp3
+    ```
+  </Step>
+  
+  <Step title="Add Vocals">
+    ```python
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="full_backing.mp3",
+        instruction="Generate the vocals track based on the audio context:",
+        caption="powerful male rock vocals, anthemic",
+        lyrics="""[Verse 1]
+Rock and roll forever
+Never gonna stop""",
+    )
+    ```
+  </Step>
+</Steps>
+
+### 2. Adding Specific Elements
+
+Enhance existing arrangements with missing elements:
+
+<CodeGroup>
+```python Add Strings to Pop Song
+params = GenerationParams(
+    task_type="lego",
+    src_audio="pop_backing.mp3",
+    instruction="Generate the strings track based on the audio context:",
+    caption="lush string section, warm pad-like sustained notes, emotional",
+    repainting_start=30.0,  # Only add to chorus section
+    repainting_end=60.0,
+)
+```
+
+```python Add Percussion Layer
+params = GenerationParams(
+    task_type="lego",
+    src_audio="basic_drums.mp3",
+    instruction="Generate the percussion track based on the audio context:",
+    caption="latin percussion, shakers, tambourine, adding groove and texture",
+)
+```
+
+```python Add Synth Lead
+params = GenerationParams(
+    task_type="lego",
+    src_audio="electronic_backing.mp3",
+    instruction="Generate the synth track based on the audio context:",
+    caption="bright synth lead melody, arpeggiated, EDM style",
+    repainting_start=60.0,  # Solo section
+    repainting_end=90.0,
+)
+```
+</CodeGroup>
+
+### 3. Vocal2BGM: Generate Accompaniment for Vocals
+
+Create full backing tracks for a cappella or vocal recordings:
+
+```python
+params = GenerationParams(
+    task_type="complete",  # Use Complete task for mixed accompaniment
+    src_audio="acapella_vocals.mp3",
+    instruction="Complete the input track with drums, bass, guitar, keyboard:",
+    caption="indie pop arrangement, organic drums, warm bass, jangly guitar, subtle keys",
+)
+```
+
+<Note>
+For generating **complete accompaniment** (multiple tracks at once), use the **Complete task** instead of Lego. Lego generates one track at a time.
+</Note>
+
+## Layer Control and Mixing
+
+### Controlling Track Characteristics
+
+Use detailed captions to control how the new track fits:
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="backing.mp3",
+    instruction="Generate the guitar track based on the audio context:",
+    # Be specific about role and characteristics
+    caption="""rhythm guitar playing sustained power chords, 
+               complementing bass, not competing with lead melody,
+               warm distorted tone, sitting back in the mix""",
+)
+```
+
+### Mixing Tips
+
+<CardGroup cols={2}>
+  <Card title="Specify Role" icon="user">
+    Make clear if the track is:
+    - Lead vs. supporting
+    - Rhythmic vs. melodic
+    - Foreground vs. background
+  </Card>
+  
+  <Card title="Production Context" icon="sliders">
+    Mention mix position:
+    - "sitting back in the mix"
+    - "prominent and upfront"
+    - "subtle atmospheric layer"
+  </Card>
+  
+  <Card title="Timbral Contrast" icon="palette">
+    Create separation:
+    - Bright synths vs. warm bass
+    - Crisp drums vs. smooth pads
+    - Different frequency ranges
+  </Card>
+  
+  <Card title="Rhythmic Relationship" icon="wave-square">
+    Describe interaction:
+    - "following drum groove"
+    - "counterpoint to melody"
+    - "syncopated rhythms"
+  </Card>
+</CardGroup>
+
+## Complete Example Workflow
+
+### Building a Full Song Layer by Layer
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Step 1: Generate drum foundation
+params1 = GenerationParams(
+    task_type="text2music",
+    caption="modern pop drums, tight kick and snare, crisp hi-hats",
+    lyrics="[Instrumental]",
+    bpm=120,
+    duration=120,
+)
+config = GenerationConfig(batch_size=1)
+result1 = generate_music(dit_handler, llm_handler, params1, config, save_dir="./layers")
+drums_path = result1.audios[0]['path']
+
+# Step 2: Add bass
+params2 = GenerationParams(
+    task_type="lego",
+    src_audio=drums_path,
+    instruction="Generate the bass track based on the audio context:",
+    caption="synth bass, deep sub-bass, following drum groove, modern pop production",
+)
+result2 = generate_music(dit_handler, llm_handler, params2, config, save_dir="./layers")
+drums_bass_path = result2.audios[0]['path']
+
+# Step 3: Add chord progression (keyboard)
+params3 = GenerationParams(
+    task_type="lego",
+    src_audio=drums_bass_path,
+    instruction="Generate the keyboard track based on the audio context:",
+    caption="electric piano chords, warm Rhodes tone, rhythmic stabs on beats",
+)
+result3 = generate_music(dit_handler, llm_handler, params3, config, save_dir="./layers")
+backing_path = result3.audios[0]['path']
+
+# Step 4: Add lead synth melody (only in specific section)
+params4 = GenerationParams(
+    task_type="lego",
+    src_audio=backing_path,
+    instruction="Generate the synth track based on the audio context:",
+    caption="bright synth lead, catchy melodic hook, cutting through the mix",
+    repainting_start=30.0,  # Chorus section
+    repainting_end=60.0,
+)
+result4 = generate_music(dit_handler, llm_handler, params4, config, save_dir="./layers")
+with_lead_path = result4.audios[0]['path']
+
+# Step 5: Add vocals
+params5 = GenerationParams(
+    task_type="lego",
+    src_audio=with_lead_path,
+    instruction="Generate the vocals track based on the audio context:",
+    caption="female pop vocal, clear and emotive, modern production",
+    lyrics="""[Verse 1]
+Dancing through the neon lights
+Feeling free and so alive
+
+[Chorus]
+This is our moment now
+We'll never come back down
+Shining like the stars above
+This feeling is enough""",
+)
+result5 = generate_music(dit_handler, llm_handler, params5, config, save_dir="./final")
+
+print(f"Final mix: {result5.audios[0]['path']}")
+```
+
+## Creative Applications
+
+### Experimental Layering
+
+<AccordionGroup>
+  <Accordion title="Genre Fusion">
+    Layer instruments from different genres:
+    
+    ```python
+    # Add sitar to electronic track
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="edm_track.mp3",
+        instruction="Generate the strings track based on the audio context:",
+        caption="indian sitar playing raga-inspired melody, exotic flavor",
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Texture Building">
+    Add atmospheric layers:
+    
+    ```python
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="minimal_track.mp3",
+        instruction="Generate the fx track based on the audio context:",
+        caption="ambient pad texture, evolving atmospheric sounds, subtle background layer",
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Rhythmic Complexity">
+    Add polyrhythmic elements:
+    
+    ```python
+    params = GenerationParams(
+        task_type="lego",
+        src_audio="straight_groove.mp3",
+        instruction="Generate the percussion track based on the audio context:",
+        caption="african djembe patterns, syncopated polyrhythms adding complexity",
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tips for Better Multi-Track Results
+
+<CardGroup cols={2}>
+  <Card title="Build Foundation First" icon="layer-group">
+    Start with rhythm section (drums + bass), then add harmonic and melodic elements
+  </Card>
+  
+  <Card title="One Track at a Time" icon="arrow-right">
+    Lego generates one track per call. Build up gradually for best control
+  </Card>
+  
+  <Card title="Specify Relationships" icon="link">
+    Describe how new track relates to existing ones ("following bass", "complementing melody")
+  </Card>
+  
+  <Card title="Use Time Ranges" icon="clock">
+    Generate tracks only in specific sections with `repainting_start/end`
+  </Card>
+  
+  <Card title="Batch for Options" icon="random">
+    Use `batch_size=3-4` to get variations of each layer
+  </Card>
+  
+  <Card title="Clear Instructions" icon="message">
+    Always specify track type in instruction clearly
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### New track doesn't fit harmonically
+
+**Solution:** 
+- Add harmonic context to caption ("following chord progression", "in key with backing")
+- Ensure source audio has clear harmonic content
+
+### Track is too prominent/too quiet
+
+**Solution:**
+- Add mixing context to caption ("subtle background layer" vs. "prominent lead")
+- Use more specific production terminology
+
+### Rhythmic sync issues
+
+**Solution:**
+- Ensure source audio has clear rhythmic foundation
+- Add tempo context to caption ("tight to the beat", "following drum groove")
+
+### Track type not generating correctly
+
+**Solution:**
+- Check instruction format matches exactly: `"Generate the {TRACK_NAME} track based on the audio context:"`
+- Verify track name is from the supported list
+
+## Related Features
+
+- **[Audio Editing](/features/audio-editing)** - Repaint, Complete, and Extract tasks
+- **[Text-to-Music](/features/text-to-music)** - Generate initial foundations
+- **[Cover Generation](/features/cover-generation)** - Transform entire arrangements
+- **[Metadata Control](/features/metadata-control)** - Control BPM and key for better layering

@@ -1,0 +1,516 @@
+---
+title: Usage Examples
+description: Complete workflow examples for the ACE-Step REST API
+---
+
+# Usage Examples
+
+Comprehensive examples demonstrating common workflows with the ACE-Step REST API.
+
+## Simple Text-to-Music Generation
+
+Generate music from a text description with default settings:
+
+```bash
+# Create task
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "inference_steps": 8
+  }'
+
+# Response:
+# {
+#   "data": {
+#     "task_id": "550e8400-e29b-41d4-a716-446655440000",
+#     "status": "queued",
+#     "queue_position": 1
+#   },
+#   "code": 200
+# }
+
+# Query status
+curl -X POST http://localhost:8001/query_result \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]
+  }'
+```
+
+## Enhanced Generation with thinking=true
+
+Use the 5Hz LM to generate audio codes for higher quality:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "thinking": true,
+    "lm_temperature": 0.85,
+    "lm_cfg_scale": 2.5
+  }'
+```
+
+<Note>
+  `thinking=true` enables the 5Hz language model to generate audio semantic codes, resulting in higher quality music generation at the cost of additional processing time.
+</Note>
+
+## Description-Driven Generation
+
+Generate music from a natural language description using `sample_query`:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sample_query": "a soft Bengali love song for a quiet evening",
+    "thinking": true
+  }'
+```
+
+The LM will automatically generate appropriate caption, lyrics, and metadata based on the description.
+
+## Format Enhancement
+
+Enhance existing prompts and lyrics using the `use_format` parameter:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "pop rock",
+    "lyrics": "[Verse 1]\nWalking down the street...",
+    "use_format": true,
+    "thinking": true
+  }'
+```
+
+## Select Specific Model
+
+Use a specific DiT model from available options:
+
+```bash
+# First, list available models
+curl http://localhost:8001/v1/models
+
+# Then select a specific model
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "electronic dance music",
+    "model": "acestep-v15-turbo",
+    "thinking": true
+  }'
+```
+
+## Custom Timesteps
+
+Override default timestep scheduling with custom values:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "jazz piano trio",
+    "timesteps": "0.97,0.76,0.615,0.5,0.395,0.28,0.18,0.085,0",
+    "thinking": true
+  }'
+```
+
+## File Upload for Cover Generation
+
+Upload a reference audio file and create a cover:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -F "prompt=remix this song" \
+  -F "src_audio=@/path/to/local/song.mp3" \
+  -F "task_type=cover" \
+  -F "audio_cover_strength=1.0"
+```
+
+## Batch Generation
+
+Generate multiple variations in one request:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "energetic rock anthem",
+    "thinking": true,
+    "batch_size": 4,
+    "use_random_seed": true
+  }'
+```
+
+## Custom Music Attributes
+
+Specify detailed musical parameters:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "classical piano piece",
+    "bpm": 80,
+    "key_scale": "C Major",
+    "time_signature": "4",
+    "audio_duration": 120,
+    "thinking": true
+  }'
+```
+
+## Using format_input Endpoint
+
+Preview LLM-enhanced formatting before generation:
+
+```bash
+# Step 1: Format the input
+curl -X POST http://localhost:8001/format_input \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "pop rock",
+    "lyrics": "Walking down the street",
+    "param_obj": "{\"duration\": 180, \"language\": \"en\"}"
+  }'
+
+# Response:
+# {
+#   "data": {
+#     "caption": "Upbeat pop rock song with electric guitar and drums",
+#     "lyrics": "[Verse 1]\nWalking down the street...",
+#     "bpm": 120,
+#     "key_scale": "G Major",
+#     "time_signature": "4",
+#     "duration": 180,
+#     "vocal_language": "en"
+#   }
+# }
+
+# Step 2: Use formatted values in generation
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "Upbeat pop rock song with electric guitar and drums",
+    "lyrics": "[Verse 1]\nWalking down the street...",
+    "bpm": 120,
+    "key_scale": "G Major",
+    "thinking": true
+  }'
+```
+
+## Using create_random_sample Endpoint
+
+Get random example parameters for inspiration:
+
+```bash
+curl -X POST http://localhost:8001/create_random_sample \
+  -H 'Content-Type: application/json' \
+  -d '{"sample_type": "simple_mode"}'
+
+# Response:
+# {
+#   "data": {
+#     "caption": "Upbeat pop song with guitar accompaniment",
+#     "lyrics": "[Verse 1]\nSunshine on my face...",
+#     "bpm": 120,
+#     "key_scale": "G Major",
+#     "time_signature": "4",
+#     "duration": 180,
+#     "vocal_language": "en"
+#   }
+# }
+```
+
+## Complete Python Workflow
+
+```python
+import requests
+import time
+import json
+
+BASE_URL = 'http://localhost:8001'
+
+# Step 1: Create generation task
+response = requests.post(
+    f'{BASE_URL}/release_task',
+    json={
+        'prompt': 'energetic rock anthem',
+        'lyrics': '[Verse 1]\nBreaking through the night',
+        'thinking': True,
+        'inference_steps': 8,
+        'bpm': 140,
+        'key_scale': 'E minor'
+    }
+)
+
+data = response.json()
+task_id = data['data']['task_id']
+print(f"Created task: {task_id}")
+
+# Step 2: Poll for completion
+while True:
+    response = requests.post(
+        f'{BASE_URL}/query_result',
+        json={'task_id_list': [task_id]}
+    )
+    
+    result_data = response.json()
+    task_result = result_data['data'][0]
+    status = task_result['status']
+    
+    if status == 1:  # Success
+        print("Task completed!")
+        # Parse the result JSON string
+        results = json.loads(task_result['result'])
+        
+        # Download each generated audio file
+        for i, result in enumerate(results):
+            file_url = result['file']
+            audio_response = requests.get(f'{BASE_URL}{file_url}')
+            
+            with open(f'output_{i}.mp3', 'wb') as f:
+                f.write(audio_response.content)
+            
+            print(f"Downloaded output_{i}.mp3")
+            print(f"  BPM: {result['metas']['bpm']}")
+            print(f"  Key: {result['metas']['keyscale']}")
+            print(f"  Duration: {result['metas']['duration']}s")
+            print(f"  Seed: {result['seed_value']}")
+        
+        break
+    
+    elif status == 2:  # Failed
+        print("Task failed")
+        break
+    
+    else:  # Still processing (status == 0)
+        print(f"Status: {status} (waiting...)")
+        time.sleep(2)
+```
+
+## Complete JavaScript Workflow
+
+```javascript
+const BASE_URL = 'http://localhost:8001';
+
+async function generateMusic() {
+  // Step 1: Create task
+  const createResponse = await fetch(`${BASE_URL}/release_task`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: 'energetic rock anthem',
+      lyrics: '[Verse 1]\nBreaking through the night',
+      thinking: true,
+      inference_steps: 8,
+      bpm: 140,
+      key_scale: 'E minor'
+    })
+  });
+
+  const createData = await createResponse.json();
+  const taskId = createData.data.task_id;
+  console.log(`Created task: ${taskId}`);
+
+  // Step 2: Poll for completion
+  while (true) {
+    const queryResponse = await fetch(`${BASE_URL}/query_result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id_list: [taskId] })
+    });
+
+    const queryData = await queryResponse.json();
+    const taskResult = queryData.data[0];
+    const status = taskResult.status;
+
+    if (status === 1) {  // Success
+      console.log('Task completed!');
+      const results = JSON.parse(taskResult.result);
+
+      // Download audio files
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const fileUrl = result.file;
+        const audioResponse = await fetch(`${BASE_URL}${fileUrl}`);
+        const blob = await audioResponse.blob();
+
+        console.log(`Output ${i}:`);
+        console.log(`  BPM: ${result.metas.bpm}`);
+        console.log(`  Key: ${result.metas.keyscale}`);
+        console.log(`  Duration: ${result.metas.duration}s`);
+        console.log(`  Seed: ${result.seed_value}`);
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `output_${i}.mp3`;
+        a.click();
+      }
+
+      break;
+    } else if (status === 2) {  // Failed
+      console.log('Task failed');
+      break;
+    } else {  // Still processing (status === 0)
+      console.log(`Status: ${status} (waiting...)`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
+
+generateMusic();
+```
+
+## Error Handling Example
+
+```python
+import requests
+from requests.exceptions import RequestException
+
+BASE_URL = 'http://localhost:8001'
+
+def create_task_with_retry(payload, max_retries=3):
+    """Create task with retry logic for transient failures."""
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                f'{BASE_URL}/release_task',
+                json=payload,
+                timeout=30
+            )
+            
+            # Check for queue full error (HTTP 429)
+            if response.status_code == 429:
+                print(f"Queue full, retrying in 5s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(5)
+                continue
+            
+            # Check for other errors
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Check response wrapper
+            if data['code'] != 200:
+                raise Exception(f"API error: {data['error']}")
+            
+            return data['data']['task_id']
+            
+        except RequestException as e:
+            print(f"Request failed: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise
+    
+    raise Exception("Max retries exceeded")
+
+# Usage
+try:
+    task_id = create_task_with_retry({
+        'prompt': 'energetic rock anthem',
+        'thinking': True
+    })
+    print(f"Task created: {task_id}")
+except Exception as e:
+    print(f"Failed to create task: {e}")
+```
+
+## Advanced: Repaint/Edit Audio
+
+```bash
+# Repaint a specific section of audio
+curl -X POST http://localhost:8001/release_task \
+  -F "prompt=jazz piano solo" \
+  -F "src_audio=@original.mp3" \
+  -F "task_type=repaint" \
+  -F "repainting_start=30.0" \
+  -F "repainting_end=60.0" \
+  -F "thinking=true"
+```
+
+## Best Practices Summary
+
+<CodeGroup>
+
+```python Python
+# 1. Use thinking=true for best quality
+payload = {
+    'prompt': 'upbeat pop song',
+    'thinking': True  # Enable LM for enhanced quality
+}
+
+# 2. Use sample_query for quick generation from descriptions
+payload = {
+    'sample_query': 'a soft Bengali love song',
+    'thinking': True
+}
+
+# 3. Use use_format=true to enhance existing inputs
+payload = {
+    'prompt': 'pop rock',
+    'lyrics': 'Walking down the street',
+    'use_format': True,
+    'thinking': True
+}
+
+# 4. Batch query for multiple tasks
+requests.post(
+    f'{BASE_URL}/query_result',
+    json={'task_id_list': [task_id1, task_id2, task_id3]}
+)
+
+# 5. Check server stats before submitting large batches
+stats = requests.get(f'{BASE_URL}/v1/stats').json()
+queue_available = stats['data']['queue_maxsize'] - stats['data']['queue_size']
+```
+
+```bash cURL
+# 1. Use thinking=true for best quality
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "upbeat pop song", "thinking": true}'
+
+# 2. Use sample_query for quick generation
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{"sample_query": "a soft Bengali love song", "thinking": true}'
+
+# 3. Check server load
+curl http://localhost:8001/v1/stats
+
+# 4. Batch query multiple tasks
+curl -X POST http://localhost:8001/query_result \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id_list": ["id1", "id2", "id3"]}'
+```
+
+</CodeGroup>
+
+<Warning>
+  For production deployments:
+  - Always enable authentication with `ACESTEP_API_KEY`
+  - Use HTTPS/TLS for encrypted communication
+  - Monitor queue size with `/v1/stats` endpoint
+  - Implement proper error handling and retries
+  - Set appropriate timeouts for long-running tasks
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/rest-endpoints">
+    Complete endpoint documentation
+  </Card>
+  <Card title="Python SDK" icon="python" href="/installation">
+    Use the Python SDK for easier integration
+  </Card>
+</CardGroup>

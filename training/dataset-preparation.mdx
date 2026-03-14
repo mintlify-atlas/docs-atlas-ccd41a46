@@ -1,0 +1,336 @@
+---
+title: "Dataset Preparation"
+description: "Prepare training data with audio files, lyrics, and metadata annotations for LoRA fine-tuning"
+---
+
+## Overview
+
+Training data for LoRA fine-tuning consists of three components per song:
+
+1. **Audio file** — Supported formats: `.mp3`, `.wav`, `.flac`, `.ogg`, `.opus`
+2. **Lyrics** — A `.lyrics.txt` file with the same name as the audio
+3. **Annotation data** — Metadata including caption, BPM, key/scale, time signature, and language
+
+<Note>
+  If you're unfamiliar with programming or scripting, you can provide the task description to AI coding tools like Claude, Cursor, or GitHub Copilot to automate the data preparation process.
+</Note>
+
+## Dataset Structure
+
+Organize your training data in a single directory:
+
+```
+dataset/
+├── song1.mp3               # Audio file
+├── song1.lyrics.txt        # Lyrics (recommended naming)
+├── song1.json              # Annotations (optional)
+├── song1.caption.txt       # Caption (optional, can be in JSON)
+├── song2.wav
+├── song2.lyrics.txt
+├── song2.json
+├── song3.flac
+├── song3.lyrics.txt
+└── annotations.csv         # Batch BPM/Key data (from Key-BPM-Finder)
+```
+
+### Audio Requirements
+
+| Attribute | Requirement |
+|-----------|-------------|
+| **Format** | `.mp3`, `.wav`, `.flac`, `.ogg`, `.opus` |
+| **Sample rate** | 44.1 kHz recommended (auto-resampled if different) |
+| **Channels** | Stereo or mono (stereo recommended) |
+| **Duration** | 2-5 minutes per song (full-length tracks work best) |
+| **Quality** | High-quality audio (320kbps MP3 or lossless) |
+| **Count** | Minimum 8 songs, 10-15 recommended |
+
+<Warning>
+  Very long songs (>5 minutes) may require more VRAM during preprocessing. If you encounter out-of-memory errors, consider splitting long tracks or using the `--max-duration` flag.
+</Warning>
+
+## Lyrics Preparation
+
+### File Naming
+
+Save lyrics as a `.lyrics.txt` file with the same base name as your audio:
+
+```
+song1.mp3 → song1.lyrics.txt  (recommended)
+song1.mp3 → song1.txt         (backward compatible)
+```
+
+Lyrics file lookup priority:
+1. `{filename}.lyrics.txt` (recommended)
+2. `{filename}.txt` (legacy support)
+
+### Lyrics Format
+
+Lyrics should be plain text with structural tags:
+
+```
+[Intro]
+La la la...
+
+[Verse 1]
+Walking down the empty street
+Echoes dancing at my feet
+
+[Chorus]
+We are the stars tonight
+Shining through the endless sky
+
+[Bridge]
+Close your eyes and feel the sound
+
+[Outro]
+Fading into the night...
+```
+
+<Accordion title="Structural tags (optional but recommended)">
+  Including structural tags like `[Verse]`, `[Chorus]`, `[Bridge]` helps the model learn song structure more effectively. Common tags:
+  
+  - `[Intro]` — Opening section
+  - `[Verse]`, `[Verse 1]`, `[Verse 2]` — Verse sections
+  - `[Pre-Chorus]` — Build-up before chorus
+  - `[Chorus]` — Main hook/refrain
+  - `[Bridge]` — Contrasting section
+  - `[Outro]` — Ending section
+  - `[Instrumental]` — Non-vocal sections
+  
+  Training without structural tags is possible but less effective.
+</Accordion>
+
+### Lyrics Transcription
+
+If you don't have existing lyrics, use these tools to transcribe:
+
+| Tool | Structural Tags | Accuracy | Ease of Use | Deployment |
+|------|----------------|----------|-------------|------------|
+| [acestep-transcriber](https://huggingface.co/ACE-Step/acestep-transcriber) | No | Good | Difficult | Self-hosted |
+| [Gemini](https://aistudio.google.com/) | Yes | Good | Easy | Paid API |
+| [Whisper](https://github.com/openai/whisper) | No | Good | Moderate | Self-hosted/API |
+| [ElevenLabs Scribe](https://elevenlabs.io/app/developers) | No | Very Good | Easy | Paid API |
+
+<Steps>
+  <Step title="Run transcription script">
+    Use provided scripts in `scripts/lora_data_prepare/`:
+    ```python
+    # OpenAI Whisper API
+    from scripts.lora_data_prepare.whisper_transcription import process_folder
+    process_folder("./my_dataset")
+    
+    # ElevenLabs Scribe API
+    from scripts.lora_data_prepare.elevenlabs_transcription import process_folder
+    process_folder("./my_dataset")
+    ```
+  </Step>
+  
+  <Step title="Review and correct errors">
+    Transcribed lyrics **must be manually reviewed**. AI transcription often contains:
+    - Misheard words
+    - Missing or incorrect punctuation  
+    - Hallucinated content (especially in instrumental sections)
+  </Step>
+  
+  <Step title="Clean LRC timestamps (if applicable)">
+    If you have LRC format lyrics, remove timestamps:
+    ```python
+    import re
+    
+    def clean_lrc_content(lines):
+        """Remove timestamps from LRC lyrics."""
+        result = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove [mm:ss.xxx] timestamps
+            cleaned = re.sub(r"\[\d{2}:\d{2}\.\d{1,3}\]", "", line)
+            result.append(cleaned)
+        return result
+    ```
+  </Step>
+  
+  <Step title="Add structural tags (optional)">
+    Use [Gemini](https://aistudio.google.com/) or manually add section markers like `[Verse]`, `[Chorus]`, etc.
+  </Step>
+</Steps>
+
+## Annotation Data
+
+### Manual JSON Annotations
+
+Create a JSON file with the same name as your audio:
+
+```json song1.json
+{
+  "caption": "A high-energy J-pop track with synthesizer leads and fast tempo",
+  "bpm": 190,
+  "keyscale": "D major",
+  "timesignature": "4/4",
+  "language": "ja"
+}
+```
+
+All fields are optional. If you don't provide annotations, you can generate them automatically.
+
+### Annotation Fields
+
+| Field | Description | Example |
+|-------|-------------|----------|
+| `caption` | Descriptive text about style, instruments, mood | `"A melancholic indie folk ballad with acoustic guitar"` |
+| `bpm` | Tempo in beats per minute | `120` |
+| `keyscale` | Musical key and mode | `"C major"`, `"A minor"` |
+| `timesignature` | Time signature | `"4/4"`, `"3/4"`, `"6/8"` |
+| `language` | Lyrics language (ISO 639-1 code) | `"en"`, `"ja"`, `"zh"` |
+
+### Automatic BPM and Key Detection
+
+Use [Key-BPM-Finder](https://vocalremover.org/key-bpm-finder) (free, browser-based):
+
+<Steps>
+  <Step title="Open Key-BPM-Finder">
+    Navigate to [vocalremover.org/key-bpm-finder](https://vocalremover.org/key-bpm-finder)
+  </Step>
+  
+  <Step title="Upload audio files">
+    Click **Browse my files** and select your audio files. Processing happens locally in your browser — files are not uploaded.
+    
+    <Warning>
+      Processing too many files at once may freeze the page. Process in batches of 10-20 files.
+    </Warning>
+  </Step>
+  
+  <Step title="Export CSV">
+    After processing completes, click **Export CSV** to download results:
+    ```csv
+    File,Artist,Title,BPM,Key,Camelot
+    song1.wav,,,190,D major,10B
+    song2.wav,,,128,A minor,8A
+    song3.wav,,,140,G major,2B
+    ```
+  </Step>
+  
+  <Step title="Add to dataset">
+    Place the CSV file in your dataset directory. The Gradio UI will automatically merge this data when scanning.
+  </Step>
+</Steps>
+
+### Automatic Caption Generation
+
+Generate captions using ACE-Step's language model or external APIs:
+
+<CodeGroup>
+```python Gradio UI (Recommended)
+# Launch Gradio with LM model enabled
+# 1. Disable service pre-initialization in startup script:
+#    Windows: INIT_SERVICE=--init_service false
+#    Linux: INIT_SERVICE=--init_service false
+# 
+# 2. Launch UI and select LM model (0.6B/1.7B/4B)
+# 3. Go to LoRA Training tab
+# 4. Load dataset and click "Auto Label" button
+```
+
+```python Gemini API
+# Using the provided Gemini caption script
+from scripts.lora_data_prepare.gemini_caption import process_folder
+
+# Generates:
+# - {filename}.lyrics.txt (transcribed lyrics)
+# - {filename}.caption.txt (style description)
+process_folder(
+    audio_dir="./my_dataset",
+    api_key="your-gemini-api-key"
+)
+```
+</CodeGroup>
+
+<Note>
+  If you already have BPM and key data, use LM caption generation only for the caption field. Generating BPM/key with LM tends to produce hallucinations — always use Key-BPM-Finder for musical metadata.
+</Note>
+
+## Using Gradio UI for Dataset Review
+
+The Gradio UI provides an interactive interface for reviewing and editing annotations:
+
+<Steps>
+  <Step title="Disable service pre-initialization">
+    Modify launch script to prevent VRAM allocation:
+    
+    **Windows** (`start_gradio_ui.bat`):
+    ```batch
+    if not defined INIT_SERVICE set INIT_SERVICE=--init_service false
+    ```
+    
+    **Linux/macOS** (`start_gradio_ui.sh`):
+    ```bash
+    : "${INIT_SERVICE:=--init_service false}"
+    ```
+  </Step>
+  
+  <Step title="Launch and select models">
+    Start Gradio UI. Select an LM model only if you need caption generation:
+    - **With caption generation**: Select `acestep-5Hz-lm-0.6B`, `1.7B`, or `4B`
+    - **Without caption generation**: Don't select any LM model
+  </Step>
+  
+  <Step title="Scan dataset">
+    Navigate to **LoRA Training** tab, enter dataset path, and click **Scan**.
+    
+    The scanner automatically recognizes:
+    - Audio files (`.mp3`, `.wav`, `.flac`, `.ogg`, `.opus`)
+    - Lyrics files (`{filename}.lyrics.txt` or `{filename}.txt`)
+    - Caption files (`{filename}.caption.txt`)
+    - JSON annotations (`{filename}.json`)
+    - CSV batch annotations (`*.csv` from Key-BPM-Finder)
+  </Step>
+  
+  <Step title="Review dataset table">
+    Check the dataset preview:
+    - **Duration** — Auto-detected from audio
+    - **Lyrics** — ✅ if `.lyrics.txt` found
+    - **Labeled** — ✅ if caption exists
+    - **BPM / Key / Caption** — Loaded from JSON/CSV
+  </Step>
+  
+  <Step title="Configure trigger tag (optional)">
+    Enter a **Custom Trigger Tag** if desired. Set **Genre Ratio** to 0 (genre descriptions are less effective than captions).
+  </Step>
+  
+  <Step title="Auto-label missing data">
+    If captions are missing and you loaded an LM model, click **Auto Label** to generate them.
+    
+    <Warning>
+      If VRAM is insufficient after labeling, restart Gradio **without** the LM model before preprocessing.
+    </Warning>
+  </Step>
+  
+  <Step title="Edit entries individually">
+    Review and modify each entry if needed. **Click Save after editing each entry.**
+  </Step>
+  
+  <Step title="Save dataset JSON">
+    Export the complete annotated dataset to JSON for preprocessing.
+  </Step>
+</Steps>
+
+## Instrumental Tracks
+
+For instrumental music without vocals:
+
+1. Create an empty `.lyrics.txt` file or omit it entirely
+2. Check **All Instrumental** in Gradio UI, or set `"lyrics": ""` in JSON
+3. Ensure captions describe the musical content (instruments, mood, genre)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Training Workflow" icon="gears" href="/training/training-workflow">
+    Start training with your prepared dataset
+  </Card>
+  
+  <Card title="LoRA Overview" icon="book" href="/training/lora-overview">
+    Learn more about what LoRA fine-tuning can achieve
+  </Card>
+</CardGroup>

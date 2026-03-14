@@ -1,0 +1,461 @@
+---
+title: 'GPU Troubleshooting'
+description: 'Diagnose and resolve GPU detection and memory issues'
+---
+
+## Quick Diagnostic
+
+Run the diagnostic tool to identify your issue:
+
+```bash
+python scripts/check_gpu.py
+```
+
+This checks PyTorch installation, GPU availability, and environment configuration.
+
+## Common Issues and Solutions
+
+### AMD GPU Not Detected (ROCm)
+
+<Accordion title="Symptoms">
+- You have an AMD GPU (RX 6000/7000/9000 series)
+- ROCm is installed
+- Still getting "No GPU detected"
+</Accordion>
+
+<Accordion title="Solution for RDNA3 GPUs (RX 7000/9000 series)">
+The `HSA_OVERRIDE_GFX_VERSION` environment variable is required:
+
+<CodeGroup>
+```bash Linux/macOS
+export HSA_OVERRIDE_GFX_VERSION=11.0.0  # For RX 7900 XT/XTX, RX 9070 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.1  # For RX 7800 XT, RX 7700 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.2  # For RX 7600
+```
+
+```cmd Windows
+set HSA_OVERRIDE_GFX_VERSION=11.0.0
+```
+</CodeGroup>
+
+Or use the provided launcher scripts which set this automatically:
+
+```cmd
+start_gradio_ui_rocm.bat
+start_api_server_rocm.bat
+```
+</Accordion>
+
+<Accordion title="Solution for RDNA2 GPUs (RX 6000 series)">
+<CodeGroup>
+```bash Linux/macOS
+export HSA_OVERRIDE_GFX_VERSION=10.3.0
+```
+
+```cmd Windows
+set HSA_OVERRIDE_GFX_VERSION=10.3.0
+```
+</CodeGroup>
+</Accordion>
+
+<Accordion title="Verify ROCm Installation">
+```bash
+# Check if ROCm can see your GPU
+rocm-smi
+
+# Check PyTorch ROCm build
+python -c "import torch; print(f'ROCm: {torch.version.hip}')"
+```
+</Accordion>
+
+### CPU-Only PyTorch Installed
+
+<Accordion title="Symptoms">
+- Diagnostic shows "Build type: CPU-only"
+</Accordion>
+
+<Accordion title="Solution for AMD GPUs">
+**Windows (ROCm 7.2):**
+
+Follow the detailed instructions in `requirements-rocm.txt`:
+
+```cmd
+# 1. Install ROCm SDK components (see requirements-rocm.txt for full URLs)
+pip install --no-cache-dir [ROCm SDK wheels...]
+
+# 2. Install PyTorch for ROCm
+pip install --no-cache-dir [PyTorch ROCm wheel...]
+
+# 3. Install dependencies
+pip install -r requirements-rocm.txt
+```
+
+**Linux (ROCm 6.0+):**
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
+pip install -r requirements-rocm-linux.txt
+```
+</Accordion>
+
+<Accordion title="Solution for NVIDIA GPUs">
+```bash
+# For CUDA 12.1 (check PyTorch website for latest version)
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# Or for CUDA 12.4+:
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+<Note>
+Check [pytorch.org](https://pytorch.org/get-started/locally/) for the latest CUDA version supported by PyTorch.
+</Note>
+</Accordion>
+
+### NVIDIA GPU Not Detected (CUDA)
+
+<Accordion title="Symptoms">
+- You have an NVIDIA GPU
+- CUDA is installed
+- Still getting "No GPU detected"
+</Accordion>
+
+<Accordion title="Solution">
+**1. Check NVIDIA drivers:**
+
+```bash
+nvidia-smi
+```
+
+If this fails, install/update NVIDIA drivers from: [nvidia.com/download](https://www.nvidia.com/download/index.aspx)
+
+**2. Check CUDA version compatibility:**
+
+The CUDA version in your PyTorch build must be compatible with your driver.
+
+```bash
+# Check PyTorch CUDA version
+python -c "import torch; print(f'CUDA: {torch.version.cuda}')"
+
+# Check driver CUDA version
+nvidia-smi  # Look for "CUDA Version: X.X"
+```
+
+**3. Reinstall PyTorch if needed:**
+
+```bash
+pip uninstall torch torchvision torchaudio
+# Check https://pytorch.org/get-started/locally/ for the latest CUDA version
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+</Accordion>
+
+### WSL2 GPU Access Issues
+
+<Accordion title="Symptoms">
+- Running in WSL2 (Windows Subsystem for Linux)
+- GPU not detected
+</Accordion>
+
+<Accordion title="Solution for NVIDIA GPUs">
+For NVIDIA GPUs in WSL2, you need CUDA on WSL2:
+
+1. Install NVIDIA drivers on **Windows** (not in WSL2)
+2. Install CUDA toolkit **in WSL2**
+3. Follow: [CUDA on WSL2 Guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)
+</Accordion>
+
+<Accordion title="Solution for AMD GPUs">
+For AMD GPUs, ROCm support in WSL2 is limited. Consider:
+
+- Running on native Linux
+- Using Windows with `start_gradio_ui_rocm.bat` / `start_api_server_rocm.bat`
+</Accordion>
+
+## CUDA Out of Memory Errors
+
+### Symptoms
+
+```
+RuntimeError: CUDA out of memory. Tried to allocate X.XX GiB
+```
+
+### Solutions
+
+<Accordion title="1. Enable CPU Offloading">
+```bash
+python acestep --offload-to-cpu
+
+# For very low VRAM:
+python acestep --offload-to-cpu --offload-dit-to-cpu
+```
+
+**VRAM savings:**
+- `--offload-to-cpu`: ~1.5GB (VAE + Text Encoder)
+- `--offload-dit-to-cpu`: ~4.7GB (DiT model)
+</Accordion>
+
+<Accordion title="2. Enable INT8 Quantization">
+```bash
+python acestep --quantization int8_weight_only --compile-model
+```
+
+**VRAM savings:** ~2.3GB (DiT model from ~4.7GB to ~2.4GB)
+</Accordion>
+
+<Accordion title="3. Reduce Batch Size">
+```bash
+python acestep --batch-size 1
+```
+
+Batch size has minimal impact on VAE VRAM (batch-sequential decode) but affects DiT inference activations.
+</Accordion>
+
+<Accordion title="4. Reduce Duration">
+```bash
+python acestep --duration 30  # 30 seconds instead of 60
+```
+
+Longer durations require more VRAM for latent tensors (though the impact is small: ~2MB per 10 minutes).
+</Accordion>
+
+<Accordion title="5. Use Smaller LM Model">
+```bash
+python acestep --lm-model acestep-5Hz-lm-0.6B  # Instead of 1.7B or 4B
+```
+
+**VRAM savings:**
+- 1.7B → 0.6B: ~2.6GB
+- 4B → 0.6B: ~7.8GB
+</Accordion>
+
+<Accordion title="6. Disable LM Completely">
+If you don't need metadata generation:
+
+```bash
+python acestep --no-init-lm
+```
+
+**VRAM savings:** 1.8GB (0.6B) to 9.6GB (4B)
+</Accordion>
+
+<Accordion title="7. Force VAE Decode on CPU">
+Set environment variable to always use CPU for VAE decode:
+
+```bash
+export ACESTEP_VAE_ON_CPU=1
+python acestep
+```
+
+This is slower but guarantees no VAE OOM errors.
+</Accordion>
+
+## GPU-Specific Configuration
+
+### RX 9070 XT / RX 7900 XT/XTX (RDNA3)
+
+<CodeGroup>
+```bash Linux/macOS
+export HSA_OVERRIDE_GFX_VERSION=11.0.0
+export MIOPEN_FIND_MODE=FAST
+```
+
+```cmd Windows (or use bat scripts)
+set HSA_OVERRIDE_GFX_VERSION=11.0.0
+set MIOPEN_FIND_MODE=FAST
+```
+</CodeGroup>
+
+### RX 6900 XT (RDNA2)
+
+<CodeGroup>
+```bash Linux/macOS
+export HSA_OVERRIDE_GFX_VERSION=10.3.0
+```
+
+```cmd Windows
+set HSA_OVERRIDE_GFX_VERSION=10.3.0
+```
+</CodeGroup>
+
+## Environment Variables Reference
+
+### ROCm (AMD GPUs)
+
+| Variable | Purpose | Example |
+|----------|---------|----------|
+| `HSA_OVERRIDE_GFX_VERSION` | Override GPU architecture | `11.0.0` (RDNA3), `10.3.0` (RDNA2) |
+| `MIOPEN_FIND_MODE` | MIOpen kernel selection mode | `FAST` (recommended) |
+| `TORCH_COMPILE_BACKEND` | PyTorch compilation backend | `eager` (ROCm Windows) |
+| `ACESTEP_LM_BACKEND` | Language model backend | `pt` (recommended for ROCm) |
+
+### CUDA (NVIDIA GPUs)
+
+| Variable | Purpose | Example |
+|----------|---------|----------|
+| `CUDA_VISIBLE_DEVICES` | Select which GPU to use | `0` (first GPU) |
+
+### ACE-Step Specific
+
+| Variable | Purpose | Example |
+|----------|---------|----------|
+| `MAX_CUDA_VRAM` | Override detected VRAM for tier simulation (also enforces hard VRAM cap) | `8` (simulate 8GB GPU) |
+| `ACESTEP_VAE_ON_CPU` | Force VAE decode on CPU to save VRAM | `1` (enable) |
+
+<Note>
+**On `MAX_CUDA_VRAM`**: When set, this variable not only changes the tier detection logic but also calls `torch.cuda.set_per_process_memory_fraction()` to enforce a hard VRAM limit. This means OOM errors during simulation are realistic and reflect actual behavior on GPUs with that amount of VRAM.
+</Note>
+
+## Driver and Toolkit Requirements
+
+### NVIDIA GPUs
+
+**Required:**
+- NVIDIA Driver: 525.60.13+ (Linux) or 528.33+ (Windows)
+- CUDA Toolkit: 11.8+ or 12.1+ (must match PyTorch CUDA version)
+
+**Check versions:**
+```bash
+# Driver version
+nvidia-smi
+
+# CUDA toolkit version
+nvcc --version
+
+# PyTorch CUDA version
+python -c "import torch; print(torch.version.cuda)"
+```
+
+### AMD GPUs
+
+**Required:**
+- ROCm: 5.7+ (Linux), 6.0+ (recommended)
+- ROCm: 7.2 (Windows)
+- HIP: Compatible with installed ROCm version
+
+**Check versions:**
+```bash
+# ROCm version
+rocm-smi --showproductname
+
+# HIP version
+hipconfig --version
+
+# PyTorch HIP version
+python -c "import torch; print(torch.version.hip)"
+```
+
+### Intel XPU
+
+**Required:**
+- Intel GPU drivers: Latest from Intel website
+- Intel Extension for PyTorch (IPEX): 2.0+
+
+**Check installation:**
+```bash
+python -c "import torch; print(torch.xpu.is_available())"
+```
+
+## LoRA Memory Issues (FIXED)
+
+<Warning>
+**Status:** ✅ **FIXED** (as of commit 731fabd)
+</Warning>
+
+### Previous Issue: High VRAM Usage with LoRA (25-30GB)
+
+**Symptoms (no longer applicable):**
+- Cannot use LoRA on 24GB VRAM GPUs (e.g., RTX 4090)
+- VRAM usage spikes to 25-30GB when loading LoRA
+- Out of memory errors during LoRA inference
+
+**What was fixed:**
+Issue was caused by inefficient memory management in the LoRA lifecycle code. The fix replaced memory-heavy `deepcopy` operations with efficient `state_dict` backups stored on CPU.
+
+**Memory usage:**
+- **Before fix**: 24-33GB VRAM (exceeds 24GB cards)
+- **After fix**: 14-18GB VRAM (fits on 24GB cards)
+- **Savings**: ~10-15GB VRAM per LoRA operation
+
+**Verify the fix:**
+
+```bash
+python scripts/validate_lora_memory.py
+```
+
+**Expected output:**
+```
+✓ No deepcopy found in load_lora/unload_lora
+✓ Using state_dict backup (memory-efficient)
+✓ Backing up to CPU (saves VRAM)
+✓ Memory diagnostics enabled
+```
+
+## Additional Resources
+
+- **ROCm Linux Setup:** See `docs/en/ACE-Step1.5-Rocm-Manual-Linux.md`
+- **ROCm Windows Setup:** See `requirements-rocm.txt`
+- **GPU Tiers:** See `docs/en/GPU_COMPATIBILITY.md`
+- **General Installation:** See `README.md`
+
+## Still Having Issues?
+
+If none of the above solutions work:
+
+1. **Run the diagnostic tool and save the output:**
+
+   ```bash
+   python scripts/check_gpu.py > gpu_diagnostic.txt
+   ```
+
+2. **Open an issue on GitHub with:**
+   - The diagnostic output
+   - Your GPU model
+   - Your OS (Windows/Linux/macOS)
+   - ROCm/CUDA version installed
+
+## Quick Reference: Common Fixes
+
+<CodeGroup>
+```bash Low VRAM (≤8GB)
+python acestep \
+  --offload-to-cpu \
+  --offload-dit-to-cpu \
+  --quantization int8_weight_only \
+  --compile-model \
+  --lm-model acestep-5Hz-lm-0.6B \
+  --batch-size 1
+```
+
+```bash Mid VRAM (8-16GB)
+python acestep \
+  --offload-to-cpu \
+  --quantization int8_weight_only \
+  --compile-model \
+  --lm-model acestep-5Hz-lm-1.7B \
+  --batch-size 2
+```
+
+```bash High VRAM (≥24GB)
+python acestep \
+  --lm-model acestep-5Hz-lm-4B \
+  --batch-size 8
+```
+
+```bash AMD ROCm (RX 7900 XTX)
+export HSA_OVERRIDE_GFX_VERSION=11.0.0
+export MIOPEN_FIND_MODE=FAST
+python acestep \
+  --lm-backend pt \
+  --offload-to-cpu \
+  --quantization int8_weight_only
+```
+
+```bash Apple Silicon (M2 Max)
+python acestep \
+  --device mps \
+  --lm-backend mlx \
+  --lm-model acestep-5Hz-lm-4B
+# No offload or quantization needed (unified memory)
+```
+</CodeGroup>

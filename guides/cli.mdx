@@ -1,0 +1,391 @@
+---
+title: 'CLI Guide'
+description: 'Use the ACE-Step command-line interface for music generation'
+icon: 'terminal'
+---
+
+The CLI provides an interactive wizard and config-driven workflow for ACE-Step inference. It's ideal for batch processing, automation, and users who prefer terminal-based workflows.
+
+## Quick Start
+
+<CodeGroup>
+```bash Interactive Wizard
+python cli.py
+```
+
+```bash From Saved Config
+python cli.py --config config.toml
+```
+
+```bash Create/Edit Config Only
+python cli.py --configure
+python cli.py --configure --config config.toml
+```
+</CodeGroup>
+
+## CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `-c`, `--config` | Path to a `.toml` configuration file to load |
+| `--configure` | Run wizard to save configuration without generating |
+| `--log-level` | Logging level: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Default: `INFO` |
+
+## Wizard Flow
+
+When you run `python cli.py` without arguments, the interactive wizard guides you through configuration:
+
+<Steps>
+  <Step title="Choose Task Type">
+    Select from 6 generation tasks:
+    - **text2music** - Generate music from text/lyrics
+    - **cover** - Transform audio into a new style
+    - **repaint** - Regenerate a specific time segment
+    - **lego** - Generate a specific instrument track (base model only)
+    - **extract** - Isolate an instrument track (base model only)
+    - **complete** - Complete partial tracks (base model only)
+  </Step>
+  
+  <Step title="Select Models">
+    - **DiT Model**: Choose from locally available models or auto-download
+    - **LM Model**: Choose from locally available 5Hz LM models or auto-download
+    
+    <Note>
+    Models are automatically filtered based on your task. For example, lego/extract/complete tasks only show base models.
+    </Note>
+  </Step>
+  
+  <Step title="Task-Specific Inputs">
+    Provide inputs based on your selected task:
+    - **Source audio** (for cover, repaint, lego, extract, complete)
+    - **Repaint time range** (for repaint)
+    - **Track selection** (for lego, extract, complete)
+    - **Instruction** (for lego, extract, complete)
+  </Step>
+  
+  <Step title="Text2Music: Simple or Custom Mode">
+    For text2music tasks:
+    - **Simple Mode**: Auto-generate caption/lyrics via LM from a description
+    - **Custom Mode**: Manually provide caption and lyrics
+  </Step>
+  
+  <Step title="Lyrics Options">
+    Choose how to provide lyrics:
+    1. Instrumental (no lyrics)
+    2. Generate lyrics automatically
+    3. Provide path to a `.txt` file
+    4. Paste lyrics directly
+  </Step>
+  
+  <Step title="Set Number of Outputs">
+    Specify how many audio clips to generate (1-8)
+  </Step>
+  
+  <Step title="Optional: Advanced Parameters">
+    Configure advanced settings:
+    - Metadata (duration, BPM, key scale, time signature)
+    - DiT settings (inference steps, guidance scale, ADG, shift, timesteps)
+    - LM settings (temperature, CFG scale, top-k, top-p, CoT options)
+    - Output settings (save directory, audio format, seeds)
+  </Step>
+  
+  <Step title="Review and Confirm">
+    Review the summary of your settings and confirm to start generation
+  </Step>
+  
+  <Step title="Save Configuration">
+    Save your settings to a `.toml` file for future reuse
+  </Step>
+</Steps>
+
+<Tip>
+If you skip advanced parameters, the wizard fills all optional parameters with defaults from `GenerationParams` and `GenerationConfig`.
+</Tip>
+
+## Configure Mode
+
+Use `--configure` to create or edit configuration files without running generation:
+
+<CodeGroup>
+```bash Create New Config
+python cli.py --configure
+# Follow wizard, then save to config.toml
+```
+
+```bash Edit Existing Config
+python cli.py --configure --config existing.toml
+# Load values from existing.toml, edit, then save
+```
+</CodeGroup>
+
+**Behavior:**
+- If `--config` is provided, the file is loaded and used as the wizard's starting values
+- After the wizard, you choose a filename to save (overwrite or new)
+- The program exits without generation
+
+## Configuration File (.toml)
+
+The wizard saves a `.toml` file containing all parameters. These keys map directly to the fields used in `cli.py`.
+
+**Example config.toml:**
+
+```toml
+project_root = "/path/to/ACE-Step-1.5"
+config_path = "acestep-v15-turbo"
+lm_model_path = "acestep-5Hz-lm-0.6B"
+backend = "vllm"
+device = "auto"
+
+task_type = "text2music"
+caption = "upbeat electronic dance music with heavy bass"
+lyrics = "[Instrumental]"
+instrumental = true
+vocal_language = "unknown"
+
+duration = 30.0
+bpm = 128
+keyscale = ""
+timesignature = ""
+
+inference_steps = 8
+seed = -1
+guidance_scale = 7.0
+shift = 3.0
+infer_method = "ode"
+
+thinking = true
+lm_temperature = 0.85
+lm_cfg_scale = 2.0
+
+batch_size = 2
+audio_format = "flac"
+save_dir = "output"
+use_random_seed = true
+```
+
+**To reuse:**
+
+```bash
+python cli.py --config config.toml
+```
+
+All keys are applied to the runtime settings.
+
+## Prompt Editing (instruction.txt)
+
+When `thinking=True` and a config file is loaded via `--config`, the CLI looks for an `instruction.txt` file in the project root. If found, its contents are used as the pre-loaded formatted prompt for LM audio-token generation, bypassing the interactive editing step.
+
+When running without a config file (wizard mode), the CLI writes the LM's formatted prompt to `instruction.txt` and pauses so you can edit it before audio-token generation proceeds.
+
+This allows fine-tuning the exact prompt (caption, lyrics, metadata) that the LM sees before generating audio codes.
+
+## Common Workflows
+
+### Quick Generation from Description
+
+<Steps>
+  <Step title="Run Wizard">
+    ```bash
+    python cli.py
+    ```
+  </Step>
+  
+  <Step title="Select text2music">
+    Choose task type 1 (text2music)
+  </Step>
+  
+  <Step title="Enable Simple Mode">
+    Choose "Use Simple Mode" when prompted
+  </Step>
+  
+  <Step title="Enter Description">
+    Describe the music you want (e.g., "a soft Bengali love song for a quiet evening")
+  </Step>
+  
+  <Step title="Generate">
+    Skip advanced parameters, confirm, and generate
+  </Step>
+</Steps>
+
+### Generate with Custom Lyrics
+
+<Steps>
+  <Step title="Prepare Lyrics File">
+    Create a `.txt` file with your lyrics:
+    ```
+    [Verse 1]
+    Walking down the street today
+    Thinking of the words you used to say
+    
+    [Chorus]
+    I'm moving on, I'm staying strong
+    This is where I belong
+    ```
+  </Step>
+  
+  <Step title="Run Wizard">
+    ```bash
+    python cli.py
+    ```
+  </Step>
+  
+  <Step title="Select Custom Mode">
+    Choose "no" for Simple Mode
+  </Step>
+  
+  <Step title="Provide Lyrics">
+    Choose option 3 (file path) and enter path to your `.txt` file
+  </Step>
+  
+  <Step title="Generate">
+    Confirm and generate
+  </Step>
+</Steps>
+
+### Remix an Existing Song
+
+<CodeGroup>
+```bash Wizard
+python cli.py
+# Choose task type 2 (cover)
+# Provide source audio path
+# Enter caption for target style
+# Generate
+```
+
+```toml Config File
+task_type = "cover"
+src_audio = "/path/to/original.mp3"
+caption = "jazz piano version"
+audio_cover_strength = 0.8
+batch_size = 2
+```
+</CodeGroup>
+
+### Extract Vocals from a Mix
+
+<Steps>
+  <Step title="Run Wizard">
+    ```bash
+    python cli.py
+    ```
+  </Step>
+  
+  <Step title="Select extract">
+    Choose task type 5 (extract)
+  </Step>
+  
+  <Step title="Provide Source">
+    Enter path to the mixed audio file
+  </Step>
+  
+  <Step title="Select Track">
+    Choose "vocals" from the available tracks
+  </Step>
+  
+  <Step title="Generate">
+    Confirm and generate
+  </Step>
+</Steps>
+
+## CLI Arguments Reference
+
+### Model Selection
+
+The CLI automatically:
+- Lists locally available models
+- Filters models based on task type (e.g., base models only for lego/extract/complete)
+- Auto-downloads missing models during initialization
+
+### Backend Selection
+
+The `--backend` flag controls the 5Hz LM backend:
+
+| Backend | Description |
+|---------|-------------|
+| `vllm` | Faster, recommended for NVIDIA with ≥8GB VRAM |
+| `pt` | PyTorch, universal fallback |
+| `mlx` | Apple Silicon optimized |
+
+**Auto-detection:**
+- Apple Silicon: `mlx` (if available), otherwise `vllm`
+- NVIDIA CUDA: `vllm`
+- Other: `pt`
+
+## Tips and Best Practices
+
+<Accordion title="Use Configuration Files for Reproducibility">
+Save your configuration to a `.toml` file and reuse it for consistent results:
+```bash
+python cli.py --configure
+# Save to my_config.toml
+python cli.py --config my_config.toml
+```
+</Accordion>
+
+<Accordion title="Batch Processing">
+Create multiple config files with different settings and run them sequentially:
+```bash
+for config in configs/*.toml; do
+  python cli.py --config "$config"
+done
+```
+</Accordion>
+
+<Accordion title="Override Settings with Environment Variables">
+Many settings can be overridden with environment variables. Check `.env.example` for available options.
+</Accordion>
+
+<Accordion title="Log Level for Debugging">
+Use `--log-level DEBUG` or `--log-level TRACE` for detailed debugging information:
+```bash
+python cli.py --config config.toml --log-level DEBUG
+```
+</Accordion>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Models not found">
+    The CLI will auto-download missing models during initialization. Ensure you have:
+    - Internet connection for downloading
+    - Sufficient disk space in `checkpoints/` directory
+    - Proper access to Hugging Face Hub (if models are hosted there)
+  </Accordion>
+  
+  <Accordion title="Out of memory">
+    Reduce batch size or enable CPU offloading:
+    ```bash
+    python cli.py --configure
+    # Set batch_size=1
+    # Enable offload_to_cpu=true
+    ```
+  </Accordion>
+  
+  <Accordion title="Invalid configuration">
+    If a `.toml` file fails to load:
+    - Check for syntax errors (valid TOML format)
+    - Ensure all paths are valid
+    - Use `--configure` to recreate the config
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Use ACE-Step programmatically in Python scripts
+  </Card>
+  
+  <Card title="REST API" icon="server" href="/guides/rest-api">
+    Integrate ACE-Step into web applications
+  </Card>
+  
+  <Card title="Gradio UI" icon="window" href="/guides/gradio-ui">
+    Use the web-based interface for interactive generation
+  </Card>
+  
+  <Card title="Generation Parameters" icon="sliders" href="/api/generation-params">
+    Detailed reference for all generation parameters
+  </Card>
+</CardGroup>

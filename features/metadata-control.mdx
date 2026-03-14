@@ -1,0 +1,551 @@
+---
+title: Metadata Control
+description: Fine-tune BPM, key, time signature, duration, and vocal language for precise music generation
+---
+
+## Overview
+
+ACE-Step 1.5 gives you detailed control over music metadata - the structural parameters that define your music's fundamental characteristics. You can either let the LM auto-detect these values or specify them manually for precise control.
+
+<Tip>
+**Most of the time, you don't need to manually set metadata.** When `thinking=True`, the LM automatically infers appropriate values based on your caption and lyrics.
+</Tip>
+
+## Available Metadata Parameters
+
+### BPM (Beats Per Minute)
+
+Controls the tempo of your music.
+
+| Range | Description | Common Styles |
+|-------|-------------|---------------|
+| 30-60 | Very slow | Ambient, drone, very slow ballads |
+| 60-80 | Slow | Ballads, slow jazz, downtempo |
+| 90-120 | Moderate | Pop, rock, folk, hip-hop |
+| 130-180 | Fast | Dance, EDM, punk, fast rock |
+| 180-300 | Very fast | Drum & bass, hardcore, speed metal |
+
+```python
+from acestep.inference import GenerationParams
+
+params = GenerationParams(
+    caption="upbeat dance track",
+    bpm=128,  # Typical house music tempo
+    thinking=False,  # Manual control
+)
+```
+
+<Note>
+**Auto-detection:** When `use_cot_metas=True`, the LM infers BPM from your caption/lyrics style.
+</Note>
+
+### Key/Scale
+
+Defines the musical key and affects overall pitch and emotional color.
+
+#### Format
+
+Key/scale uses the format: `"[Note][Accidental] [Mode]"`
+
+- **Notes:** A, B, C, D, E, F, G
+- **Accidentals:** ♯ (sharp), ♭ (flat), # (ASCII sharp), b (ASCII flat), or none
+- **Modes:** major, minor
+
+#### Common Keys
+
+<AccordionGroup>
+  <Accordion title="Major Keys">
+    Bright, happy, uplifting feel:
+    - `"C Major"` - No sharps/flats, most neutral
+    - `"G Major"` - Bright, open
+    - `"D Major"` - Brilliant, festive
+    - `"A Major"` - Warm, cheerful
+    - `"E Major"` - Bold, heroic
+    - `"F Major"` - Pastoral, peaceful
+    - `"Bb Major"` - Mellow, warm
+    - `"Eb Major"` - Majestic, rich
+  </Accordion>
+  
+  <Accordion title="Minor Keys">
+    Dark, sad, emotional feel:
+    - `"Am"` - Natural, melancholic
+    - `"Em"` - Somber, introspective
+    - `"Dm"` - Serious, pensive
+    - `"Bm"` - Dramatic, passionate
+    - `"F# minor"` - Intense, dark
+    - `"C# minor"` - Desperate, longing
+    - `"Gm"` - Serious, earnest
+  </Accordion>
+</AccordionGroup>
+
+```python
+params = GenerationParams(
+    caption="melancholic piano ballad",
+    keyscale="Am",  # A minor for sad feeling
+    thinking=False,
+)
+```
+
+<Warning>
+**Stability:** Common keys (C, G, D, Am, Em) are most stable. Rare keys may be ignored or shifted by the model.
+</Warning>
+
+### Time Signature
+
+Defines the rhythmic structure and meter.
+
+| Value | Signature | Description | Common Styles |
+|-------|-----------|-------------|---------------|
+| `"2"` | 2/4 | Two beats per measure | Marches, polka |
+| `"3"` | 3/4 | Three beats per measure | Waltz, ballads |
+| `"4"` | 4/4 | Four beats per measure | Most pop, rock, hip-hop |
+| `"6"` | 6/8 | Six eighth-notes per measure | Folk dances, compound time |
+
+```python
+params = GenerationParams(
+    caption="elegant waltz with flowing strings",
+    timesignature="3",  # 3/4 time for waltz
+    thinking=False,
+)
+```
+
+<Note>
+**4/4 is most reliable.** Complex time signatures (5/4, 7/8) are advanced and may not work consistently.
+</Note>
+
+### Duration
+
+Target audio length in seconds.
+
+| Range | Typical Use |
+|-------|-------------|
+| 10-30s | Short loops, excerpts, social media clips |
+| 30-60s | Short songs, verse+chorus |
+| 60-180s | Standard song length (1-3 minutes) |
+| 180-360s | Extended songs (3-6 minutes) |
+| 360-600s | Long compositions (6-10 minutes) |
+
+```python
+params = GenerationParams(
+    caption="ambient drone piece",
+    duration=300,  # 5 minutes
+    thinking=False,
+)
+```
+
+<Tip>
+**Auto-sizing from lyrics:** When duration is not set (`-1` or `None`), the model automatically determines length based on lyrics content and structure.
+</Tip>
+
+### Vocal Language
+
+Specifies the language for lyrics and vocal generation.
+
+#### Supported Languages (50+)
+
+ACE-Step supports all major world languages. Some examples:
+
+<CardGroup cols={3}>
+  <Card title="European">
+    - English (`en`)
+    - Spanish (`es`)
+    - French (`fr`)
+    - German (`de`)
+    - Italian (`it`)
+    - Portuguese (`pt`)
+    - Russian (`ru`)
+  </Card>
+  
+  <Card title="Asian">
+    - Chinese (`zh`)
+    - Japanese (`ja`)
+    - Korean (`ko`)
+    - Hindi (`hi`)
+    - Bengali (`bn`)
+    - Thai (`th`)
+    - Vietnamese (`vi`)
+  </Card>
+  
+  <Card title="Others">
+    - Arabic (`ar`)
+    - Turkish (`tr`)
+    - Indonesian (`id`)
+    - Hebrew (`he`)
+    - Persian (`fa`)
+    - Tamil (`ta`)
+    - Cantonese (`yue`)
+  </Card>
+</CardGroup>
+
+<Accordion title="View Full Language List">
+See `acestep/constants.py:VALID_LANGUAGES` for the complete list of 50+ supported languages.
+
+Use `"unknown"` for auto-detection when using LM thinking mode.
+</Accordion>
+
+```python
+params = GenerationParams(
+    caption="romantic ballad",
+    lyrics="""[Verse 1]
+Te amo más que ayer
+Menos que mañana""",
+    vocal_language="es",  # Spanish vocals
+)
+```
+
+## Auto vs. Manual Control
+
+### Automatic Inference (Default)
+
+Let the LM determine metadata based on context:
+
+```python
+params = GenerationParams(
+    caption="slow emotional ballad with piano and strings",
+    lyrics="""[Verse 1]
+Sample lyrics here...""",
+    thinking=True,        # Enable LM
+    use_cot_metas=True,  # Auto-infer all metadata
+)
+# LM will automatically set appropriate BPM, key, duration, etc.
+```
+
+**Pros:**
+- Convenient and fast
+- Good default choices
+- Works well for exploration
+
+**Cons:**
+- Less precise control
+- May vary between generations
+- Can't guarantee specific values
+
+### Manual Control
+
+Specify all metadata explicitly:
+
+```python
+params = GenerationParams(
+    caption="jazz trio improvisation",
+    lyrics="[Instrumental]",
+    bpm=120,
+    keyscale="Bb Major",
+    timesignature="4",
+    duration=180,
+    thinking=False,  # Disable auto-inference
+)
+```
+
+**Pros:**
+- Precise control
+- Reproducible results
+- Match external requirements
+
+**Cons:**
+- Requires music theory knowledge
+- More setup time
+- Risk of invalid combinations
+
+### Hybrid Approach
+
+Set some values manually, let LM infer others:
+
+```python
+params = GenerationParams(
+    caption="upbeat pop song",
+    lyrics="""[Verse 1]...""",
+    bpm=128,              # Manual tempo
+    thinking=True,        # Enable LM
+    use_cot_metas=True,  # Auto-infer key, duration, etc.
+)
+# You control tempo, LM handles the rest
+```
+
+## How LM Uses Metadata in CoT
+
+When `thinking=True` and `use_cot_metas=True`, the LM performs Chain-of-Thought reasoning:
+
+<Steps>
+  <Step title="Analyze Input">
+    LM reads your caption and lyrics to understand:
+    - Intended style and genre
+    - Emotional tone
+    - Structural complexity
+    - Lyric content and language
+  </Step>
+  
+  <Step title="Reason About Metadata">
+    LM reasons internally:
+    - "This is a slow ballad, so BPM should be around 70"
+    - "Sad emotional tone suggests minor key"
+    - "Three verses + chorus structure needs ~120 seconds"
+    - "Lyrics are in Japanese, set language to 'ja'"
+  </Step>
+  
+  <Step title="Generate Metadata">
+    LM outputs structured metadata that guides DiT generation
+  </Step>
+</Steps>
+
+This reasoning is visible in the result:
+
+```python
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+
+# Access LM-generated metadata
+lm_metadata = result.extra_outputs.get("lm_metadata", {})
+print(f"LM inferred BPM: {lm_metadata.get('bpm')}")
+print(f"LM inferred key: {lm_metadata.get('keyscale')}")
+print(f"LM inferred duration: {lm_metadata.get('duration')}s")
+```
+
+## Understanding Control Boundaries
+
+Metadata parameters are **guidance** rather than **precise commands**.
+
+### How the Model Interprets Values
+
+The model doesn't mechanically execute exact values:
+
+<Note>
+**Example:** Setting `bpm=120` doesn't guarantee exactly 120 BPM output.
+
+Instead, the model:
+1. Uses 120 as an **anchor point**
+2. Samples from a distribution near this value
+3. Final result might be 118-122 BPM
+
+It's like telling a musician "around 120 tempo" - they'll play in that range naturally, not rigidly follow a metronome.
+</Note>
+
+### Common vs. Rare Values
+
+| Parameter | Common (Stable) | Rare (May Drift) |
+|-----------|-----------------|------------------|
+| **BPM** | 60-180 | &lt;60, &gt;200 |
+| **Key** | C, G, D, Am, Em, Dm | F#, C#, Ab |
+| **Time Sig** | 4/4, 3/4 | 5/4, 7/8, 6/8 |
+| **Duration** | 30-240s | &lt;20s, &gt;360s |
+
+<Warning>
+Extreme or rare metadata values may be:
+- Ignored (model uses default)
+- Shifted (adjusted to nearest common value)
+- Unstable (varies between generations)
+</Warning>
+
+## When to Manually Set Metadata
+
+<CardGroup cols={2}>
+  <Card title="Daily Generation" icon="wand-magic-sparkles">
+    **Don't set manually**
+    
+    Let LM auto-infer for quick exploration and prototyping.
+  </Card>
+  
+  <Card title="Specific Tempo Needed" icon="gauge-high">
+    **Set BPM manually**
+    
+    When you need precise tempo for:
+    - Matching other tracks
+    - DJ mixing
+    - Sync to video
+  </Card>
+  
+  <Card title="Genre Requirements" icon="music">
+    **Set timesignature**
+    
+    For specific styles:
+    - Waltz → `"3"`
+    - March → `"2"`
+    - Standard → `"4"`
+  </Card>
+  
+  <Card title="Fixed Duration" icon="clock">
+    **Set duration**
+    
+    When length must match:
+    - Video background music
+    - Radio/podcast intros
+    - Specific format requirements
+  </Card>
+  
+  <Card title="Musical Key Preference" icon="key">
+    **Set keyscale**
+    
+    For specific key color or:
+    - Matching other instruments
+    - Vocal range requirements
+    - Harmonic preferences
+  </Card>
+  
+  <Card title="Multi-Language Projects" icon="language">
+    **Set vocal_language**
+    
+    To ensure consistent language or when LM detection is unreliable
+  </Card>
+</CardGroup>
+
+## Complete Examples
+
+### Example 1: Full Manual Control
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Precise specifications for a client deliverable
+params = GenerationParams(
+    task_type="text2music",
+    caption="uplifting corporate background music with piano, strings, optimistic feel",
+    lyrics="[Instrumental]",
+    # Manual metadata for exact requirements
+    bpm=120,
+    keyscale="C Major",
+    timesignature="4",
+    duration=60,  # Exactly 1 minute for video
+    thinking=False,  # No LM, direct control
+    inference_steps=8,
+    seed=42,  # Reproducible
+)
+
+config = GenerationConfig(
+    batch_size=1,
+    use_random_seed=False,
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+### Example 2: Auto-Inference
+
+```python
+# Quick creative exploration
+params = GenerationParams(
+    task_type="text2music",
+    caption="dark mysterious ambient soundscape",
+    lyrics="[Instrumental]",
+    # Let LM decide everything
+    thinking=True,
+    use_cot_metas=True,  # Auto BPM, key, duration
+)
+
+config = GenerationConfig(
+    batch_size=4,  # Generate variations
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+
+# Check what LM decided
+for audio in result.audios:
+    lm_meta = result.extra_outputs.get("lm_metadata", {})
+    print(f"LM chose: BPM={lm_meta.get('bpm')}, Key={lm_meta.get('keyscale')}")
+```
+
+### Example 3: Hybrid Control
+
+```python
+# Control tempo, let LM handle the rest
+params = GenerationParams(
+    task_type="text2music",
+    caption="energetic drum and bass track with complex breakbeats",
+    lyrics="[Instrumental]",
+    bpm=174,  # Specific D&B tempo
+    # Auto-infer key, duration
+    thinking=True,
+    use_cot_metas=True,
+)
+
+config = GenerationConfig(batch_size=2)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+### Example 4: Language-Specific Generation
+
+```python
+# Ensure Korean vocals
+params = GenerationParams(
+    task_type="text2music",
+    caption="K-pop dance track with catchy hooks, bright synths, powerful vocals",
+    lyrics="""[Verse 1]
+밤하늘의 별처럼 빛나
+우리 함께 춤춰요
+
+[Chorus]
+영원히 이 순간
+잊지 못할 거야""",
+    vocal_language="ko",  # Explicitly set Korean
+    thinking=True,
+    use_cot_metas=True,  # Auto BPM, key, duration
+)
+
+config = GenerationConfig(batch_size=2)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Don't Conflict Caption" icon="ban">
+    **Avoid:**
+    ```python
+    caption="slow ballad"  # Says slow
+    bpm=160  # But fast tempo
+    ```
+    
+    Keep caption and metadata consistent.
+  </Card>
+  
+  <Card title="Use Recommended Ranges" icon="chart-line">
+    Stick to common values for stability:
+    - BPM: 60-180
+    - Keys: C, G, D, Am, Em
+    - Time sig: 4/4 or 3/4
+  </Card>
+  
+  <Card title="Let LM Help" icon="robot">
+    Even when setting some values manually, enable CoT caption/language enhancement:
+    ```python
+    bpm=128  # Manual
+    use_cot_caption=True  # Auto-enhance
+    ```
+  </Card>
+  
+  <Card title="Test and Iterate" icon="rotate">
+    Start with auto-inference, then refine:
+    1. Generate with LM
+    2. Check inferred metadata
+    3. Adjust manually if needed
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Metadata seems ignored
+
+**Possible causes:**
+- Value too extreme (e.g., BPM 300)
+- Conflicts with caption description
+- Model variant doesn't support parameter
+
+**Solution:** Use common/moderate values and ensure caption consistency
+
+### Results vary despite fixed metadata
+
+**Cause:** Randomness in generation (seed varies)
+
+**Solution:** Set `use_random_seed=False` and provide fixed `seed`
+
+### Duration doesn't match exactly
+
+**Expected behavior:** Duration is a target, not absolute. Model may generate ±5-10% variance.
+
+**Solution:** For exact lengths, use audio editing tools to trim output
+
+## Related Features
+
+- **[Text-to-Music](/features/text-to-music)** - Use metadata in music generation
+- **[Cover Generation](/features/cover-generation)** - Metadata affects cover transformations
+- **[Audio Editing](/features/audio-editing)** - Repaint with metadata control
+- **[Multi-Track](/features/multi-track)** - Layer tracks with matching metadata

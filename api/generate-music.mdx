@@ -1,0 +1,378 @@
+---
+title: generate_music
+description: Generate music using ACE-Step model with optional LM reasoning
+---
+
+`generate_music` is the main function for generating music using the ACE-Step 1.5 model. It supports text-to-music, covers, repainting, stem extraction, and more.
+
+## Function Signature
+
+```python
+def generate_music(
+    dit_handler,
+    llm_handler,
+    params: GenerationParams,
+    config: GenerationConfig,
+    save_dir: Optional[str] = None,
+    progress=None,
+) -> GenerationResult
+```
+
+## Parameters
+
+<ParamField path="dit_handler" type="AceStepHandler" required>
+  Initialized DiT model handler (AceStepHandler instance). See [AceStepHandler](/api/handler).
+</ParamField>
+
+<ParamField path="llm_handler" type="LLMHandler" required>
+  Initialized LLM handler (LLMHandler instance) for Chain-of-Thought reasoning.
+</ParamField>
+
+<ParamField path="params" type="GenerationParams" required>
+  Generation parameters. See [GenerationParams](/api/generation-params).
+</ParamField>
+
+<ParamField path="config" type="GenerationConfig" required>
+  Generation configuration for batch and output settings. See [GenerationConfig](/api/generation-config).
+</ParamField>
+
+<ParamField path="save_dir" type="Optional[str]" default="None">
+  Directory to save generated audio files. If None, audio tensors are returned but files are not saved.
+</ParamField>
+
+<ParamField path="progress" type="Optional[Any]" default="None">
+  Optional progress callback (e.g., Gradio progress tracker).
+</ParamField>
+
+## Returns
+
+<ResponseField name="GenerationResult" type="GenerationResult">
+  Result object containing generated audio files and metadata.
+  
+  **Fields:**
+  - `audios` (`List[Dict[str, Any]]`): List of generated audio dictionaries
+  - `status_message` (`str`): Status message from generation
+  - `extra_outputs` (`Dict[str, Any]`): Extra outputs (latents, masks, lm_metadata, time_costs)
+  - `success` (`bool`): Whether generation completed successfully
+  - `error` (`Optional[str]`): Error message if generation failed
+</ResponseField>
+
+### Audio Dictionary Structure
+
+Each item in `audios` list contains:
+
+```python
+{
+    "path": str,           # File path to saved audio (empty if save_dir=None)
+    "tensor": Tensor,      # Audio tensor [channels, samples], CPU, float32
+    "key": str,            # Unique audio key (UUID based on params)
+    "sample_rate": int,    # Sample rate (default: 48000)
+    "params": Dict,        # Generation params for this audio (includes seed, audio_codes, etc.)
+}
+```
+
+### Extra Outputs Structure
+
+`extra_outputs` contains:
+
+```python
+{
+    "lm_metadata": Dict,    # LM-generated metadata (bpm, keyscale, etc.)
+    "time_costs": Dict,     # Timing information
+    "latents": Tensor,      # Intermediate DiT latents (if available)
+    "masks": Tensor,        # Attention masks (if available)
+}
+```
+
+## Usage Examples
+
+### Basic Text-to-Music Generation
+
+```python
+from acestep.handler import AceStepHandler
+from acestep.llm_inference import LLMHandler
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Initialize handlers
+dit_handler = AceStepHandler()
+llm_handler = LLMHandler()
+
+dit_handler.initialize_service(
+    project_root="/path/to/project",
+    config_path="acestep-v15-turbo",
+    device="cuda"
+)
+
+llm_handler.initialize(
+    checkpoint_dir="/path/to/checkpoints",
+    lm_model_path="acestep-5Hz-lm-0.6B",
+    backend="vllm",
+    device="cuda"
+)
+
+# Configure generation
+params = GenerationParams(
+    caption="upbeat electronic dance music with heavy bass",
+    bpm=128,
+    duration=30,
+)
+
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac",
+)
+
+# Generate music
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/path/to/output"
+)
+
+# Check results
+if result.success:
+    for audio in result.audios:
+        print(f"Generated: {audio['path']}")
+        print(f"Seed: {audio['params']['seed']}")
+else:
+    print(f"Error: {result.error}")
+```
+
+### Generate Song with Lyrics
+
+```python
+params = GenerationParams(
+    caption="emotional pop ballad",
+    lyrics="""Verse 1:
+Walking down the street today
+Thinking of the words you used to say
+
+Chorus:
+I'm moving on, I'm staying strong""",
+    vocal_language="en",
+    bpm=72,
+    duration=45,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### Style Cover Generation
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original_song.mp3",
+    caption="jazz piano version",
+    audio_cover_strength=0.8,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### Repaint Audio Section
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="original.mp3",
+    repainting_start=10.0,  # seconds
+    repainting_end=20.0,
+    caption="smooth transition with piano solo",
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### High-Quality Generation (Base Model)
+
+```python
+params = GenerationParams(
+    caption="intricate jazz fusion",
+    inference_steps=64,
+    guidance_scale=8.0,
+    use_adg=True,
+    shift=3.0,
+    seed=42,
+)
+
+config = GenerationConfig(
+    batch_size=1,
+    use_random_seed=False,
+    audio_format="wav",
+)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+```
+
+### Batch Generation with Specific Seeds
+
+```python
+params = GenerationParams(
+    caption="epic cinematic music",
+)
+
+config = GenerationConfig(
+    batch_size=4,
+    seeds=[42, 123, 456],  # 4th will be random
+    use_random_seed=False,
+    lm_batch_chunk_size=2,
+)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if result.success:
+    for audio in result.audios:
+        print(f"Seed {audio['params']['seed']}: {audio['path']}")
+```
+
+### Access Timing Information
+
+```python
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if result.success:
+    time_costs = result.extra_outputs.get("time_costs", {})
+    print(f"LM Phase 1: {time_costs.get('lm_phase1_time', 0):.2f}s")
+    print(f"LM Phase 2: {time_costs.get('lm_phase2_time', 0):.2f}s")
+    print(f"DiT Total: {time_costs.get('dit_total_time_cost', 0):.2f}s")
+    print(f"Pipeline Total: {time_costs.get('pipeline_total_time', 0):.2f}s")
+```
+
+### Access LM-Generated Metadata
+
+```python
+params = GenerationParams(
+    caption="rock music",
+    thinking=True,
+    use_cot_metas=True,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if result.success:
+    lm_meta = result.extra_outputs.get("lm_metadata")
+    if lm_meta:
+        print(f"LM detected BPM: {lm_meta.get('bpm')}")
+        print(f"LM detected Key: {lm_meta.get('keyscale')}")
+        print(f"LM detected Duration: {lm_meta.get('duration')}s")
+```
+
+## Task Types
+
+The `task_type` parameter supports:
+
+- `"text2music"`: Generate music from text descriptions (default)
+- `"cover"`: Transform existing audio while maintaining structure
+- `"repaint"`: Regenerate a specific time segment
+- `"lego"`: Generate a specific instrument track (base model only)
+- `"extract"`: Extract/isolate a specific instrument (base model only)
+- `"complete"`: Complete/extend partial tracks (base model only)
+
+See [Inference Guide](/features/text-to-music) for detailed task documentation.
+
+## LM Integration
+
+The 5Hz Language Model is used for:
+
+1. **Chain-of-Thought Reasoning** (`thinking=True`):
+   - Generates audio semantic codes
+   - Infers missing metadata (BPM, key, duration)
+   - Refines captions and detects language
+
+2. **Skipped for Certain Tasks**:
+   - `cover` and `repaint` tasks skip LM code generation
+   - These tasks use reference/source audio directly
+
+3. **Controlled via Parameters**:
+   - `thinking`: Enable/disable LM audio code generation
+   - `use_cot_metas`: Enable metadata inference
+   - `use_cot_caption`: Enable caption refinement
+   - `use_cot_language`: Enable language detection
+
+## Error Handling
+
+```python
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if not result.success:
+    print(f"Generation failed: {result.error}")
+    print(f"Status: {result.status_message}")
+else:
+    print(f"Generated {len(result.audios)} audio files")
+```
+
+## Performance Notes
+
+- **Automatic VRAM Management**: ACE-Step includes VRAM guard that automatically reduces `batch_size` if GPU memory is insufficient
+- **Adaptive VAE Decode**: Falls back to CPU offload or full CPU decode if GPU VRAM is low
+- **Batch Processing**: Larger `batch_size` is faster per-sample but requires more VRAM
+- **LM Chunking**: `lm_batch_chunk_size` controls LM memory usage
+- **Audio Format**: `flac` (default) provides good balance of speed and file size
+
+See [GPU Compatibility Guide](/concepts/gpu-compatibility) for VRAM requirements and optimization tips.
+
+## See Also
+
+- [GenerationParams](/api/generation-params) - Music generation parameters
+- [GenerationConfig](/api/generation-config) - Batch and output configuration
+- [AceStepHandler](/api/handler) - DiT model handler
+- [Inference Guide](/features/text-to-music) - Complete inference documentation

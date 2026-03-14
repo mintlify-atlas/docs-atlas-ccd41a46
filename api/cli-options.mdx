@@ -1,0 +1,719 @@
+---
+title: CLI Options
+description: Command-line flags and configuration options for ACE-Step 1.5
+icon: sliders
+---
+
+Comprehensive reference for all CLI flags, options, and environment variables.
+
+## Core Options
+
+<ParamField path="-c, --config" type="string">
+  Path to a TOML configuration file to load. All parameters can be specified in the config file.
+  
+  ```bash
+  acestep --config my-generation.toml
+  ```
+</ParamField>
+
+<ParamField path="--configure" type="boolean" default="false">
+  Run wizard to save configuration without generating. Useful for building reusable config templates.
+  
+  ```bash
+  # Create new config
+  acestep --configure
+  
+  # Edit existing config
+  acestep --configure --config existing.toml
+  ```
+</ParamField>
+
+<ParamField path="--log-level" type="string" default="INFO">
+  Logging level for internal modules. Options: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+  
+  ```bash
+  acestep --log-level DEBUG
+  ```
+</ParamField>
+
+---
+
+## Model Selection
+
+<ParamField path="--config-path" type="string">
+  DiT model configuration name or path. Available models:
+  - `acestep-v15-turbo` (default, fastest inference)
+  - `acestep-v15-base` (required for lego/extract/complete tasks)
+  
+  Auto-downloaded if missing. Use `acestep-download` to pre-download.
+  
+  ```bash
+  # Use base model for stem extraction
+  acestep --config-path acestep-v15-base
+  ```
+</ParamField>
+
+<ParamField path="--lm-model-path" type="string">
+  Language model name or path for thinking mode. Auto-detected from available models if not specified.
+  
+  ```bash
+  acestep --lm-model-path Qwen/Qwen3-1.5B-Instruct
+  ```
+</ParamField>
+
+<ParamField path="--backend" type="string" default="auto">
+  5Hz LM backend selection. Options:
+  - `vllm` - High-performance inference (CUDA)
+  - `pt` - PyTorch native (fallback)
+  - `mlx` - Apple Silicon native acceleration (macOS only)
+  
+  Auto-detected: `mlx` on Apple Silicon, `vllm` on CUDA, `pt` otherwise.
+  
+  ```bash
+  acestep --backend mlx  # Force MLX on macOS
+  ```
+</ParamField>
+
+---
+
+## Task Configuration
+
+<ParamField path="--task-type" type="string" default="text2music">
+  Generation task type. Options:
+  - `text2music` - Generate music from text/lyrics
+  - `cover` - Transform existing audio into new style
+  - `repaint` - Regenerate specific time segment
+  - `lego` - Generate specific instrument track in context
+  - `extract` - Isolate specific instrument track from mix
+  - `complete` - Complete/extend partial tracks
+  
+  ```bash
+  acestep --task-type cover --src-audio input.wav
+  ```
+</ParamField>
+
+<ParamField path="--caption" type="string">
+  Music description or prompt. Required for most tasks except `extract`.
+  
+  ```bash
+  acestep --caption "energetic rock song with electric guitar solo"
+  ```
+</ParamField>
+
+<ParamField path="--lyrics" type="string">
+  Lyrics for generation. Options:
+  - Path to `.txt` file
+  - Inline text (use `\\n` for line breaks)
+  - `"[Instrumental]"` for instrumental music
+  - `"generate"` to auto-generate via LM
+  
+  ```bash
+  # From file
+  acestep --lyrics lyrics.txt
+  
+  # Inline
+  acestep --lyrics "Verse 1\\nChorus\\nVerse 2"
+  
+  # Auto-generate
+  acestep --lyrics generate --caption "sad ballad"
+  ```
+</ParamField>
+
+<ParamField path="--instruction" type="string">
+  Task-specific instruction for DiT model. Auto-generated for lego/extract/complete tasks based on tracks.
+  
+  ```bash
+  acestep --task-type lego --instruction "Generate electric guitar track"
+  ```
+</ParamField>
+
+<ParamField path="--src-audio" type="string">
+  Source audio file path. Required for: `cover`, `repaint`, `lego`, `extract`, `complete`.
+  
+  ```bash
+  acestep --task-type cover --src-audio original.wav
+  ```
+</ParamField>
+
+---
+
+## Track Selection (Task-Specific)
+
+<ParamField path="--lego-track" type="string">
+  Track name for `lego` task. Available options:
+  `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`, `keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`
+  
+  ```bash
+  acestep --task-type lego --lego-track guitar --src-audio mix.wav
+  ```
+</ParamField>
+
+<ParamField path="--extract-track" type="string">
+  Track name for `extract` task. Same options as `--lego-track`.
+  
+  ```bash
+  acestep --task-type extract --extract-track vocals --src-audio song.wav
+  ```
+</ParamField>
+
+<ParamField path="--complete-tracks" type="string">
+  Comma-separated track names for `complete` task.
+  
+  ```bash
+  acestep --task-type complete --complete-tracks "drums,bass,guitar" --src-audio partial.wav
+  ```
+</ParamField>
+
+---
+
+## Time Range (Repaint Task)
+
+<ParamField path="--repainting-start" type="float" default="0.0">
+  Start time in seconds for repaint region.
+  
+  ```bash
+  acestep --task-type repaint --repainting-start 10.0 --repainting-end 20.0
+  ```
+</ParamField>
+
+<ParamField path="--repainting-end" type="float" default="-1">
+  End time in seconds for repaint region. Use `-1` for end of audio.
+</ParamField>
+
+---
+
+## Generation Parameters
+
+<ParamField path="--duration" type="float" default="30.0">
+  Generated audio duration in seconds. Range: 10-600s.
+  
+  GPU memory limits apply:
+  - < 8GB: max 2 minutes with LM, 4 minutes without
+  - 8-16GB: max 4 minutes with LM, 8 minutes without
+  - 16-24GB: max 6 minutes with LM, 10 minutes without
+  - >= 24GB: max 10 minutes
+  
+  ```bash
+  acestep --duration 60
+  ```
+</ParamField>
+
+<ParamField path="--batch-size" type="integer" default="1">
+  Number of outputs to generate.
+  
+  ```bash
+  acestep --batch-size 4  # Generate 4 variations
+  ```
+</ParamField>
+
+<ParamField path="--seed" type="integer" default="-1">
+  Random seed for reproducibility. Use `-1` for random seed.
+  
+  ```bash
+  acestep --seed 42  # Reproducible output
+  ```
+</ParamField>
+
+<ParamField path="--use-random-seed" type="boolean" default="false">
+  Use different random seed for each batch item.
+  
+  ```bash
+  acestep --batch-size 4 --use-random-seed true
+  ```
+</ParamField>
+
+<ParamField path="--seeds" type="string">
+  Comma or space-separated list of seeds for each batch item. Automatically sets `batch_size` to list length.
+  
+  ```bash
+  acestep --seeds "42,123,456,789"
+  ```
+</ParamField>
+
+---
+
+## Metadata Parameters
+
+<ParamField path="--bpm" type="integer">
+  Beats per minute (30-300). Empty for auto-detection.
+  
+  ```bash
+  acestep --bpm 120
+  ```
+</ParamField>
+
+<ParamField path="--keyscale" type="string">
+  Musical key and scale (e.g., "C Major", "A Minor"). Empty for auto.
+  
+  ```bash
+  acestep --keyscale "C Major"
+  ```
+</ParamField>
+
+<ParamField path="--timesignature" type="string">
+  Time signature (e.g., "4/4", "3/4"). Empty for auto.
+  
+  ```bash
+  acestep --timesignature "4/4"
+  ```
+</ParamField>
+
+<ParamField path="--vocal-language" type="string" default="unknown">
+  Vocal language code. Examples: `en`, `zh`, `ja`, `ko`, `es`, `fr`, `de`, `it`, `pt`, `ru`.
+  
+  Auto-detected from caption if mentioned (e.g., "Chinese song" sets `zh`).
+  
+  ```bash
+  acestep --vocal-language ja
+  ```
+</ParamField>
+
+<ParamField path="--instrumental" type="boolean" default="false">
+  Generate instrumental music without vocals.
+  
+  ```bash
+  acestep --instrumental true
+  ```
+</ParamField>
+
+---
+
+## DiT Inference Settings
+
+<ParamField path="--inference-steps" type="integer" default="64">
+  Number of diffusion steps. More steps = higher quality but slower.
+  
+  ```bash
+  acestep --inference-steps 128  # Higher quality
+  ```
+</ParamField>
+
+<ParamField path="--guidance-scale" type="float" default="3.0">
+  Classifier-free guidance scale. Higher values = stronger prompt adherence.
+  
+  Only used with base models (acestep-v15-base).
+  
+  ```bash
+  acestep --guidance-scale 5.0
+  ```
+</ParamField>
+
+<ParamField path="--use-adg" type="boolean" default="false">
+  Enable Adaptive Dual Guidance for base models.
+  
+  ```bash
+  acestep --config-path acestep-v15-base --use-adg true
+  ```
+</ParamField>
+
+<ParamField path="--cfg-interval-start" type="float" default="0.0">
+  CFG interval start (0.0-1.0) for guidance scheduling.
+</ParamField>
+
+<ParamField path="--cfg-interval-end" type="float" default="1.0">
+  CFG interval end (0.0-1.0) for guidance scheduling.
+</ParamField>
+
+<ParamField path="--shift" type="float" default="3.0">
+  Timestep shift parameter (1.0-5.0). Affects diffusion schedule.
+  
+  ```bash
+  acestep --shift 4.0
+  ```
+</ParamField>
+
+<ParamField path="--infer-method" type="string" default="ode">
+  Inference method: `ode` or `sde`.
+  
+  ```bash
+  acestep --infer-method sde
+  ```
+</ParamField>
+
+<ParamField path="--timesteps" type="string">
+  Custom timesteps list as comma-separated values or Python list format.
+  
+  ```bash
+  acestep --timesteps "0.97,0.5,0.0"
+  acestep --timesteps "[0.97, 0.5, 0.0]"
+  ```
+</ParamField>
+
+<ParamField path="--audio-cover-strength" type="float" default="0.8">
+  Strength parameter for `cover` task (0.0-1.0). Higher = more transformation.
+  
+  ```bash
+  acestep --task-type cover --audio-cover-strength 0.6
+  ```
+</ParamField>
+
+---
+
+## Language Model Settings
+
+<ParamField path="--thinking" type="boolean" default="auto">
+  Enable LM "thinking" mode for audio-token generation, caption enhancement, and lyric generation.
+  
+  Auto-enabled based on GPU memory (>=8GB by default).
+  
+  ```bash
+  acestep --thinking true
+  ```
+</ParamField>
+
+<ParamField path="--lm-temperature" type="float" default="1.0">
+  LM sampling temperature (0.0-2.0). Higher = more creative/random.
+  
+  ```bash
+  acestep --lm-temperature 1.2
+  ```
+</ParamField>
+
+<ParamField path="--lm-cfg-scale" type="float" default="1.0">
+  LM classifier-free guidance scale.
+  
+  ```bash
+  acestep --lm-cfg-scale 1.5
+  ```
+</ParamField>
+
+<ParamField path="--lm-top-k" type="integer" default="0">
+  LM top-k sampling. Use `0` to disable.
+  
+  ```bash
+  acestep --lm-top-k 50
+  ```
+</ParamField>
+
+<ParamField path="--lm-top-p" type="float" default="0.9">
+  LM nucleus sampling parameter (0.0-1.0).
+  
+  ```bash
+  acestep --lm-top-p 0.95
+  ```
+</ParamField>
+
+<ParamField path="--lm-negative-prompt" type="string">
+  Negative prompt for LM guidance.
+  
+  ```bash
+  acestep --lm-negative-prompt "repetitive, boring"
+  ```
+</ParamField>
+
+---
+
+## Chain-of-Thought (CoT) Options
+
+<ParamField path="--use-cot-metas" type="boolean" default="false">
+  Use LM to generate/refine metadata (BPM, key, time signature).
+  
+  ```bash
+  acestep --use-cot-metas true
+  ```
+</ParamField>
+
+<ParamField path="--use-cot-caption" type="boolean" default="false">
+  Use LM to enhance/refine caption.
+  
+  ```bash
+  acestep --use-cot-caption true
+  ```
+</ParamField>
+
+<ParamField path="--use-cot-lyrics" type="boolean" default="false">
+  Use LM to auto-generate lyrics. Requires `--caption` for context.
+  
+  Automatically enables `--thinking=true`.
+  
+  ```bash
+  acestep --use-cot-lyrics true --caption "upbeat pop song"
+  ```
+</ParamField>
+
+<ParamField path="--use-cot-language" type="boolean" default="false">
+  Use LM to detect vocal language.
+  
+  ```bash
+  acestep --use-cot-language true
+  ```
+</ParamField>
+
+<ParamField path="--use-constrained-decoding" type="boolean" default="false">
+  Enable constrained decoding for LM output format validation.
+  
+  ```bash
+  acestep --use-constrained-decoding true
+  ```
+</ParamField>
+
+<ParamField path="--constrained-decoding-debug" type="boolean" default="false">
+  Enable debug output for constrained decoding.
+</ParamField>
+
+---
+
+## Simple Mode (text2music only)
+
+<ParamField path="--sample-mode" type="boolean" default="false">
+  Enable Simple Mode: auto-generate caption and lyrics from query.
+  
+  Only available for `task_type=text2music`.
+  
+  ```bash
+  acestep --sample-mode true --sample-query "relaxing jazz piano"
+  ```
+</ParamField>
+
+<ParamField path="--sample-query" type="string">
+  High-level description for Simple Mode auto-generation.
+  
+  ```bash
+  acestep --sample-query "epic orchestral soundtrack"
+  ```
+</ParamField>
+
+<ParamField path="--use-format" type="boolean" default="false">
+  Use `format_sample` to enhance caption/lyrics before generation.
+  
+  ```bash
+  acestep --use-format true
+  ```
+</ParamField>
+
+---
+
+## Performance & Hardware
+
+<ParamField path="--device" type="string" default="auto">
+  Computation device. Options: `auto`, `cuda`, `cpu`, `mps`, `xpu`.
+  
+  Auto-detects: `xpu` > `cuda` > `mps` > `cpu`.
+  
+  ```bash
+  acestep --device cuda
+  ```
+</ParamField>
+
+<ParamField path="--offload-to-cpu" type="boolean" default="auto">
+  Offload models to CPU when not in use to save GPU memory.
+  
+  Auto-enabled for GPUs < 16GB (except Apple Silicon unified memory).
+  
+  ```bash
+  acestep --offload-to-cpu true
+  ```
+</ParamField>
+
+<ParamField path="--offload-dit-to-cpu" type="boolean" default="false">
+  Offload DiT model specifically to CPU.
+  
+  ```bash
+  acestep --offload-dit-to-cpu true
+  ```
+</ParamField>
+
+<ParamField path="--use-flash-attention" type="boolean" default="auto">
+  Enable Flash Attention 2 for faster inference (requires compatible GPU).
+  
+  Auto-detected based on device capabilities.
+  
+  ```bash
+  acestep --use-flash-attention true
+  ```
+</ParamField>
+
+<ParamField path="--allow-lm-batch" type="boolean" default="true">
+  Allow batch processing for LM inference.
+  
+  ```bash
+  acestep --allow-lm-batch false
+  ```
+</ParamField>
+
+<ParamField path="--lm-batch-chunk-size" type="integer" default="4">
+  Chunk size for LM batch processing.
+  
+  ```bash
+  acestep --lm-batch-chunk-size 8
+  ```
+</ParamField>
+
+---
+
+## Output Settings
+
+<ParamField path="--save-dir" type="string" default="output">
+  Directory to save generated audio files.
+  
+  ```bash
+  acestep --save-dir /path/to/output
+  ```
+</ParamField>
+
+<ParamField path="--audio-format" type="string" default="mp3">
+  Output audio format. Options: `mp3`, `wav`, `flac`.
+  
+  ```bash
+  acestep --audio-format wav
+  ```
+</ParamField>
+
+---
+
+## Environment Variables
+
+ACE-Step respects several environment variables for advanced configuration:
+
+<ParamField path="ACE_STEP_SUPPRESS_AUDIO_TOKENS" type="string" default="1">
+  Suppress verbose audio token logs. Set to `0` or `false` to show.
+  
+  ```bash
+  export ACE_STEP_SUPPRESS_AUDIO_TOKENS=0
+  acestep
+  ```
+</ParamField>
+
+<ParamField path="ACESTEP_COMPILE_MODEL" type="string" default="">
+  Enable PyTorch model compilation for faster inference. Set to `1`, `true`, `yes`, or `on`.
+  
+  ```bash
+  export ACESTEP_COMPILE_MODEL=1
+  acestep
+  ```
+  
+  <Note>Model compilation adds startup time but improves inference speed.</Note>
+</ParamField>
+
+<ParamField path="HTTP_PROXY, HTTPS_PROXY" type="string">
+  Proxy settings for model downloads. Automatically cleared by CLI to avoid network issues.
+  
+  Set in `.env` or `.env.example` if needed.
+</ParamField>
+
+---
+
+## Configuration via .env File
+
+The CLI loads environment variables from `.env` or `.env.example` if present in the project root.
+
+```bash .env example
+ACE_STEP_SUPPRESS_AUDIO_TOKENS=0
+ACESTEP_COMPILE_MODEL=1
+```
+
+This allows project-level defaults without modifying command-line invocations.
+
+---
+
+## GPU Memory Recommendations
+
+The CLI auto-detects GPU memory and adjusts defaults:
+
+| GPU Memory | Max Duration (with LM) | Max Duration (without LM) | Max Batch (with LM) | Default LM Init |
+|------------|------------------------|---------------------------|---------------------|------------------|
+| < 8 GB     | 2 min                  | 4 min                     | 1                   | No               |
+| 8-16 GB    | 4 min                  | 8 min                     | 2                   | Yes              |
+| 16-24 GB   | 6 min                  | 10 min                    | 4                   | Yes              |
+| >= 24 GB   | 10 min                 | 10 min                    | 8                   | Yes              |
+
+<Note>
+Apple Silicon (MPS) uses unified memory - offloading provides no benefit and is auto-disabled.
+</Note>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash Text to Music (Simple)
+acestep \
+  --caption "upbeat electronic dance music" \
+  --instrumental true \
+  --duration 60 \
+  --seed 42
+```
+
+```bash Text to Music with Lyrics
+acestep \
+  --caption "emotional ballad" \
+  --lyrics lyrics.txt \
+  --vocal-language en \
+  --bpm 80 \
+  --keyscale "C Major" \
+  --batch-size 2
+```
+
+```bash Audio Cover
+acestep \
+  --task-type cover \
+  --src-audio original.wav \
+  --caption "heavy metal version" \
+  --audio-cover-strength 0.7 \
+  --duration 30
+```
+
+```bash Repaint Section
+acestep \
+  --task-type repaint \
+  --src-audio song.wav \
+  --caption "add guitar solo" \
+  --repainting-start 30 \
+  --repainting-end 45
+```
+
+```bash Extract Vocals
+acestep \
+  --task-type extract \
+  --extract-track vocals \
+  --src-audio mix.wav \
+  --config-path acestep-v15-base
+```
+
+```bash Generate Guitar Track (Lego)
+acestep \
+  --task-type lego \
+  --lego-track guitar \
+  --src-audio backing.wav \
+  --caption "blues guitar solo" \
+  --config-path acestep-v15-base
+```
+
+```bash Complete Arrangement
+acestep \
+  --task-type complete \
+  --complete-tracks "drums,bass,guitar" \
+  --src-audio piano-only.wav \
+  --caption "full rock band arrangement" \
+  --config-path acestep-v15-base
+```
+
+```bash Simple Mode Auto-Generation
+acestep \
+  --sample-mode true \
+  --sample-query "relaxing lo-fi hip hop for studying" \
+  --duration 120 \
+  --batch-size 3
+```
+
+```bash Advanced DiT + LM Settings
+acestep \
+  --caption "cinematic orchestral piece" \
+  --thinking true \
+  --use-cot-metas true \
+  --use-cot-caption true \
+  --inference-steps 128 \
+  --guidance-scale 4.0 \
+  --lm-temperature 1.2 \
+  --shift 3.5
+```
+
+```bash Low VRAM Setup
+acestep \
+  --caption "ambient music" \
+  --duration 30 \
+  --offload-to-cpu true \
+  --thinking false \
+  --batch-size 1
+```
+</CodeGroup>

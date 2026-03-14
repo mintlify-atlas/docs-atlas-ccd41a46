@@ -1,0 +1,380 @@
+---
+title: Text-to-Music Generation
+description: Generate music from text descriptions using ACE-Step's text2music task
+---
+
+## Overview
+
+Text-to-music generation is the core feature of ACE-Step 1.5, allowing you to create music from text descriptions. The model supports both simple prompts like "relaxing piano music" and detailed descriptions with genre, mood, instruments, and structure.
+
+The text2music task uses the `GenerationParams` API with `task_type="text2music"`.
+
+## How It Works
+
+<Steps>
+  <Step title="LM Planning (Optional)">
+    The 5Hz Language Model acts as an "omni-capable planner" that:
+    - Understands your text intent through Chain-of-Thought (CoT) reasoning
+    - Infers music metadata (BPM, key, duration) automatically
+    - Generates semantic codes containing composition melody and orchestration
+    - Expands and optimizes your caption for better results
+  </Step>
+  
+  <Step title="DiT Generation">
+    The Diffusion Transformer (DiT) receives semantic codes and conditions:
+    - Gradually "carves" audio from noise through diffusion
+    - Decides final timbre, mixing, and production details
+    - Outputs high-fidelity audio (48kHz stereo)
+  </Step>
+</Steps>
+
+<Note>
+The LM is **optional**. If you disable thinking mode, DiT generates directly from your text input. This gives you full control but requires more precise prompting.
+</Note>
+
+## Input Methods
+
+### Caption: The Overall Portrait
+
+**Caption is the most important factor** affecting your generated music. It describes the "overall portrait" - style, atmosphere, timbre, instruments, and emotion.
+
+<Tip>
+Supported formats:
+- Simple style words: `"jazz piano"`
+- Comma-separated tags: `"electronic, synthwave, energetic, heavy bass"`
+- Natural language: `"upbeat electronic dance music with heavy bass and synthesizer leads"`
+</Tip>
+
+#### Writing Effective Captions
+
+Combine multiple dimensions for precise control:
+
+| Dimension | Examples |
+|-----------|----------|
+| **Style/Genre** | pop, rock, jazz, electronic, hip-hop, folk, classical, lo-fi |
+| **Emotion/Atmosphere** | melancholic, uplifting, energetic, dreamy, dark, nostalgic |
+| **Instruments** | acoustic guitar, piano, synth pads, 808 drums, strings, brass |
+| **Timbre Texture** | warm, bright, crisp, airy, punchy, lush, raw, polished |
+| **Era Reference** | 80s synth-pop, 90s grunge, vintage soul, modern trap |
+| **Production Style** | lo-fi, high-fidelity, live recording, bedroom pop |
+| **Vocal Characteristics** | female vocal, breathy, powerful, falsetto, raspy |
+
+<CodeGroup>
+```python Good Example
+from acestep.inference import GenerationParams
+
+params = GenerationParams(
+    caption="melancholic indie folk with acoustic guitar, soft female breathy vocal, warm intimate atmosphere, gentle strings, lo-fi production",
+    task_type="text2music",
+    duration=60,
+)
+```
+
+```python Too Vague
+params = GenerationParams(
+    caption="good music",  # ❌ Not specific enough
+    task_type="text2music",
+)
+```
+</CodeGroup>
+
+### Lyrics: The Temporal Script
+
+Lyrics control **how music unfolds over time**. They're not just lyric content - they carry structure tags, vocal style hints, and energy changes.
+
+#### Structure Tags
+
+<AccordionGroup>
+  <Accordion title="Basic Structure Tags">
+    - `[Intro]` - Opening, establish atmosphere
+    - `[Verse]` / `[Verse 1]` - Verse sections, narrative progression
+    - `[Pre-Chorus]` - Build energy before chorus
+    - `[Chorus]` - Main hook, emotional climax
+    - `[Bridge]` - Transition or elevation
+    - `[Outro]` - Ending, conclusion
+  </Accordion>
+  
+  <Accordion title="Dynamic Sections">
+    - `[Build]` - Energy gradually rising
+    - `[Drop]` - Electronic music energy release
+    - `[Breakdown]` - Reduced instrumentation, create space
+  </Accordion>
+  
+  <Accordion title="Instrumental Sections">
+    - `[Instrumental]` - Pure instrumental, no vocals
+    - `[Guitar Solo]` - Guitar solo section
+    - `[Piano Interlude]` - Piano interlude
+  </Accordion>
+</AccordionGroup>
+
+#### Combining Tags
+
+You can combine structure tags with style hints using `-`:
+
+```
+[Chorus - anthemic]
+Dreams are burning bright tonight
+We rise together into the light
+
+[Bridge - whispered]
+In the silence, hear the call
+```
+
+<Warning>
+**Don't stack too many tags:**
+```
+❌ [Chorus - anthemic - stacked harmonies - high energy - powerful - epic]
+✅ [Chorus - anthemic]
+```
+Too many tags confuse the model. Put complex style descriptions in Caption instead.
+</Warning>
+
+## Simple vs Think Mode
+
+### Think Mode (Default)
+
+Enables LM Chain-of-Thought reasoning:
+
+```python
+params = GenerationParams(
+    caption="upbeat pop song",
+    thinking=True,  # Default
+    use_cot_metas=True,  # Auto-infer BPM, key, duration
+    use_cot_caption=True,  # Enhance caption
+)
+```
+
+**Pros:**
+- Automatic metadata detection
+- Caption enhancement
+- Better results from minimal input
+- More diverse outputs
+
+**Cons:**
+- Slightly slower (adds LM inference time)
+- Less precise control
+
+### Simple Mode (No LM)
+
+Disable LM for direct DiT generation:
+
+```python
+params = GenerationParams(
+    caption="jazz trio with piano, upright bass, and brush drums",
+    thinking=False,
+    bpm=120,
+    keyscale="C Major",
+    duration=60,
+)
+```
+
+**Pros:**
+- Faster generation
+- Full manual control
+- Reproducible results
+
+**Cons:**
+- Requires precise prompting
+- Must specify all metadata manually
+
+## Metadata Control
+
+<Tip>
+Most of the time, you don't need to manually set metadata. When `thinking=True`, the LM automatically infers appropriate values.
+</Tip>
+
+### Available Parameters
+
+| Parameter | Range | Description |
+|-----------|-------|-------------|
+| `bpm` | 30-300 | Tempo. Common: slow (60-80), mid (90-120), fast (130-180) |
+| `keyscale` | A-G + #/♭ + major/minor | Musical key (e.g., "C Major", "Am", "F# minor") |
+| `timesignature` | "2", "3", "4", "6" | Time signature (4/4 most common, 3/4 for waltz, 6/8 for swing) |
+| `duration` | 10-600 seconds | Target length. Auto-detected from lyrics if not set |
+| `vocal_language` | ISO 639-1 codes | Vocal language (en, zh, ja, es, fr, etc.) |
+
+<CodeGroup>
+```python Manual Metadata
+params = GenerationParams(
+    caption="slow jazz ballad",
+    bpm=72,
+    keyscale="Eb Major",
+    timesignature="4",
+    duration=180,
+    vocal_language="en",
+    thinking=False,  # Disable auto-inference
+)
+```
+
+```python Auto-Inference
+params = GenerationParams(
+    caption="slow jazz ballad",
+    thinking=True,
+    use_cot_metas=True,  # LM infers all metadata
+)
+```
+</CodeGroup>
+
+### Understanding Control Boundaries
+
+These parameters are **guidance** rather than **precise commands**:
+
+- **BPM**: Common range (60-180) works well; extreme values may be unstable
+- **Key**: Common keys (C, G, D, Am, Em) are most stable
+- **Time signature**: 4/4 is most reliable; complex signatures (5/4, 7/8) are advanced
+- **Duration**: Short (30-60s) and medium (2-4min) are stable
+
+<Note>
+The model doesn't mechanically execute `bpm=120`, but uses it as an **anchor point** for sampling. Final result might be 118 or 122, not exactly 120.
+</Note>
+
+## Vocal Language Options
+
+ACE-Step supports **50+ languages** for lyrics and vocals:
+
+<AccordionGroup>
+  <Accordion title="Major Languages (50+ supported)">
+    Arabic (ar), Bengali (bn), Chinese (zh), English (en), French (fr), German (de), Hindi (hi), Indonesian (id), Italian (it), Japanese (ja), Korean (ko), Portuguese (pt), Russian (ru), Spanish (es), Thai (th), Turkish (tr), Vietnamese (vi), and many more.
+    
+    See `acestep/constants.py:VALID_LANGUAGES` for the complete list.
+  </Accordion>
+</AccordionGroup>
+
+```python
+params = GenerationParams(
+    caption="romantic ballad with emotional vocals",
+    lyrics="""[Verse 1]
+月光洒在窗台上
+我听见你的呼吸
+
+[Chorus]
+让我们燃烧吧
+像夜空中的烟火""",
+    vocal_language="zh",  # Chinese vocals
+)
+```
+
+<Tip>
+Set `vocal_language="unknown"` for auto-detection, or leave blank when using LM thinking mode.
+</Tip>
+
+## Complete Examples
+
+### Example 1: Simple Instrumental
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="text2music",
+    caption="calm ambient music with soft piano and strings, warm atmosphere",
+    lyrics="[Instrumental]",
+    duration=60,
+    thinking=True,
+)
+
+config = GenerationConfig(
+    batch_size=2,  # Generate 2 variations
+    audio_format="flac",
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+
+if result.success:
+    for audio in result.audios:
+        print(f"Generated: {audio['path']}")
+        print(f"Seed: {audio['params']['seed']}")
+```
+
+### Example 2: Song with Lyrics
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="emotional pop ballad with female vocal, piano, strings, building to powerful chorus",
+    lyrics="""[Intro - piano]
+
+[Verse 1]
+Walking down the street today
+Thinking of the words you used to say
+Everything feels different now
+But I'll find my way somehow
+
+[Pre-Chorus]
+This moment feels so quiet
+Yet my heart is racing wild
+
+[Chorus - powerful]
+I'm moving on, I'm staying strong
+This is where I belong
+I'll find my light, I'll write my song
+This is where I belong
+
+[Outro - fade out]""",
+    vocal_language="en",
+    thinking=True,
+)
+
+config = GenerationConfig(batch_size=1)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+### Example 3: Precise Manual Control
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="fast-paced drum and bass with heavy sub-bass, complex breakbeats, dark atmosphere",
+    lyrics="[Instrumental]",
+    bpm=174,  # Typical D&B tempo
+    keyscale="Dm",
+    timesignature="4",
+    duration=90,
+    thinking=False,  # Manual control, no LM
+    inference_steps=8,
+    seed=42,  # Reproducible results
+)
+
+config = GenerationConfig(
+    batch_size=1,
+    use_random_seed=False,  # Use fixed seed
+)
+
+result = generate_music(dit_handler, llm_handler, params, config, save_dir="./output")
+```
+
+## Tips for Better Results
+
+<CardGroup cols={2}>
+  <Card title="Be Specific" icon="crosshairs">
+    "upbeat electronic dance music with heavy bass" beats "good music"
+  </Card>
+  
+  <Card title="Combine Dimensions" icon="layer-group">
+    Mix style + emotion + instruments + timbre for precise control
+  </Card>
+  
+  <Card title="Use References" icon="bookmark">
+    "in the style of 80s synthwave" quickly conveys complex aesthetics
+  </Card>
+  
+  <Card title="Texture Words Matter" icon="palette">
+    Adjectives like warm, crisp, airy, punchy influence mixing and timbre
+  </Card>
+  
+  <Card title="Avoid Conflicts" icon="ban">
+    Don't mix contradictory styles like "classical strings" + "hardcore metal" unless using temporal evolution
+  </Card>
+  
+  <Card title="Start Simple, Iterate" icon="rotate">
+    Generate quickly, listen, adjust prompts based on results
+  </Card>
+</CardGroup>
+
+## Related Features
+
+- **[Cover Generation](/features/cover-generation)** - Transform existing audio while changing style
+- **[Audio Editing](/features/audio-editing)** - Edit specific sections with Repaint
+- **[Multi-Track](/features/multi-track)** - Add instrument layers to existing audio
+- **[Metadata Control](/features/metadata-control)** - Deep dive into BPM, key, and duration control

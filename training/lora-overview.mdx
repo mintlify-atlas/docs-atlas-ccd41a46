@@ -1,0 +1,183 @@
+---
+title: "LoRA Fine-Tuning Overview"
+description: "Learn what LoRA is, why to use it, and what you can achieve with parameter-efficient fine-tuning in ACE-Step 1.5"
+---
+
+## What is LoRA Fine-Tuning?
+
+LoRA (Low-Rank Adaptation) is a parameter-efficient fine-tuning technique that allows you to customize ACE-Step 1.5 to capture specific musical styles without retraining the entire model.
+
+Instead of updating all 1.5 billion parameters of the DiT decoder, LoRA injects small trainable adapter layers into the attention mechanisms. These adapters learn style-specific patterns while keeping the base model frozen.
+
+<Note>
+  LoRA fine-tuning is based on the research paper ["LoRA: Low-Rank Adaptation of Large Language Models"](https://arxiv.org/abs/2106.09685) by Hu et al., 2021.
+</Note>
+
+## Why Use LoRA?
+
+LoRA offers several key advantages for music generation:
+
+### Parameter Efficiency
+- **Train only 1-5% of model parameters** — A rank-64 LoRA typically has ~10M trainable parameters vs. 1.5B in the full model
+- **Small file size** — Trained LoRAs are typically 50-200 MB instead of multi-gigabyte checkpoints
+- **Share and distribute easily** — LoRA weights can be shared without redistributing the entire base model
+
+### Hardware Accessibility
+- **Train on consumer GPUs** — 16 GB VRAM is generally sufficient with gradient checkpointing
+- **Fast training** — Train a LoRA from 8-10 songs in **1 hour on an RTX 3090** or **~15 minutes on an A100**
+- **Low memory footprint** — 16 GB minimum, 20 GB+ recommended for full-length songs
+
+### Style Capture
+LoRA excels at learning:
+- **Artist-specific timbres** — Vocal characteristics, instrument choices, production style
+- **Genre conventions** — Harmonic progressions, rhythmic patterns, arrangement techniques
+- **Production aesthetics** — Mixing style, spatial effects, frequency balance
+- **Structural patterns** — Song form preferences, intro/outro styles, transition techniques
+
+## What You Can Achieve
+
+With a properly trained LoRA, you can:
+
+<Steps>
+  <Step title="Capture unique musical styles">
+    Train on 8-15 songs from a specific artist, album, or genre to capture their distinctive sound
+  </Step>
+  
+  <Step title="Generate in learned styles">
+    Create new music that follows the stylistic patterns learned from your training data
+  </Step>
+  
+  <Step title="Combine with text prompts">
+    Guide generation with lyrics and metadata while maintaining the learned style
+  </Step>
+  
+  <Step title="Mix and match adapters">
+    Load multiple LoRAs to blend different stylistic influences (experimental)
+  </Step>
+</Steps>
+
+### Training Requirements
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| **Dataset size** | 8 songs | 10-15 songs |
+| **Song duration** | 2-4 minutes each | Full-length tracks |
+| **GPU VRAM** | 16 GB | 20 GB+ |
+| **Training time** | ~1 hour (RTX 3090) | ~15 min (A100) |
+| **Training data** | Audio + lyrics + metadata | Complete annotations |
+
+<Warning>
+  Training with fewer than 8 songs may result in overfitting. The model will memorize the training examples rather than learning generalizable style patterns.
+</Warning>
+
+## LoRA vs Full Fine-Tuning
+
+| Aspect | LoRA | Full Fine-Tuning |
+|--------|------|------------------|
+| **Trainable parameters** | 1-5% (~10M) | 100% (~1.5B) |
+| **VRAM requirement** | 16-24 GB | 80+ GB |
+| **Training time** | 1 hour | Days to weeks |
+| **Disk space** | 50-200 MB | 6+ GB per checkpoint |
+| **Overfitting risk** | Low | High (without large dataset) |
+| **Deployment** | Requires base model | Standalone |
+| **Use case** | Style adaptation | Complete model training |
+
+## When to Use LoRA
+
+### LoRA is Ideal For:
+
+<AccordionGroup>
+  <Accordion title="Capturing artist or album styles">
+    Train on a cohesive collection of 8-15 tracks to learn specific production and compositional patterns. Perfect for creating music "in the style of" a particular artist or album.
+  </Accordion>
+  
+  <Accordion title="Genre-specific adaptations">
+    Focus the model on a specific subgenre or fusion style by training on representative examples.
+  </Accordion>
+  
+  <Accordion title="Production style transfer">
+    Learn characteristic mixing, mastering, and spatial processing techniques from a reference corpus.
+  </Accordion>
+  
+  <Accordion title="Rapid experimentation">
+    Quickly test different training approaches, hyperparameters, or datasets with fast iteration cycles.
+  </Accordion>
+</AccordionGroup>
+
+### Consider Full Fine-Tuning When:
+- You have access to 80+ GB VRAM (A100 or H100)
+- You need to fundamentally change model behavior beyond style
+- You're training on thousands of songs with diverse labels
+- You want a completely standalone model checkpoint
+
+## How LoRA Works
+
+LoRA injects trainable low-rank matrices into the attention projection layers of the DiT decoder:
+
+```python
+# Original attention layer (frozen)
+output = W_original @ input  # W is (d x d)
+
+# LoRA adds a low-rank decomposition
+output = W_original @ input + (B @ A) @ input
+# where A is (r x d) and B is (d x r), with r << d
+# Only A and B are trained, W_original stays frozen
+```
+
+Default target modules in ACE-Step:
+- `q_proj` — Query projection in self-attention
+- `k_proj` — Key projection in self-attention
+- `v_proj` — Value projection in self-attention
+- `o_proj` — Output projection in self-attention
+
+### Key Hyperparameters
+
+<CodeGroup>
+```python LoRA Config
+from acestep.training.configs import LoRAConfig
+
+config = LoRAConfig(
+    r=64,              # Rank: higher = more capacity (16-128)
+    alpha=128,         # Scaling factor (typically 2x rank)
+    dropout=0.1,       # LoRA dropout probability
+    target_modules=[   # Which layers to adapt
+        "q_proj", "k_proj", "v_proj", "o_proj"
+    ],
+    bias="none"        # Whether to train bias terms
+)
+```
+
+```python Training Config  
+from acestep.training.configs import TrainingConfig
+
+training = TrainingConfig(
+    learning_rate=1e-4,              # AdamW learning rate
+    batch_size=1,                    # Per-device batch size
+    gradient_accumulation_steps=4,   # Effective batch = 4
+    max_epochs=100,                  # Total epochs
+    save_every_n_epochs=10,          # Checkpoint frequency
+    warmup_steps=100,                # LR warmup duration
+    gradient_checkpointing=True      # Enable to save VRAM
+)
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dataset Preparation" icon="database" href="/training/dataset-preparation">
+    Learn how to prepare audio, lyrics, and annotations for training
+  </Card>
+  
+  <Card title="Training Workflow" icon="gears" href="/training/training-workflow">
+    Follow the complete training workflow from data to deployed LoRA
+  </Card>
+  
+  <Card title="Advanced Training" icon="rocket" href="/training/advanced-training">
+    Explore Side-Step toolkit, LoKR adapters, and gradient sensitivity analysis
+  </Card>
+  
+  <Card title="Gradio UI Training" icon="window" href="/guides/gradio-ui#lora-training">
+    Use the one-click training interface in Gradio
+  </Card>
+</CardGroup>

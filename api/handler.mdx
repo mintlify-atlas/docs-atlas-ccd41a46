@@ -1,0 +1,390 @@
+---
+title: AceStepHandler
+description: Business logic handler for ACE-Step model operations
+---
+
+`AceStepHandler` is the main handler class that encapsulates all data processing and business logic as a bridge between the model and UI. It manages model initialization, generation, and various audio processing operations.
+
+## Class Definition
+
+```python
+class AceStepHandler(
+    DiffusionMixin,
+    GenerateMusicMixin,
+    GenerateMusicDecodeMixin,
+    GenerateMusicPayloadMixin,
+    GenerateMusicExecuteMixin,
+    GenerateMusicRequestMixin,
+    AudioCodesMixin,
+    BatchPrepMixin,
+    ConditioningBatchMixin,
+    ConditioningEmbedMixin,
+    ConditioningMaskMixin,
+    ConditioningTargetMixin,
+    ConditioningTextMixin,
+    IoAudioMixin,
+    InitServiceMixin,
+    LyricScoreMixin,
+    LyricTimestampMixin,
+    LoraManagerMixin,
+    MemoryUtilsMixin,
+    MetadataMixin,
+    MlxDitInitMixin,
+    MlxVaeDecodeNativeMixin,
+    MlxVaeEncodeNativeMixin,
+    MlxVaeInitMixin,
+    PaddingMixin,
+    ProgressMixin,
+    PromptMixin,
+    ServiceGenerateMixin,
+    TrainingPresetMixin,
+    TaskUtilsMixin,
+    VaeDecodeChunksMixin,
+    VaeDecodeMixin,
+    VaeEncodeChunksMixin,
+    VaeEncodeMixin,
+    ServiceGenerateRequestMixin,
+    ServiceGenerateExecuteMixin,
+    ServiceGenerateOutputsMixin,
+):
+    """ACE-Step Business Logic Handler"""
+```
+
+## Initialization
+
+```python
+from acestep.handler import AceStepHandler
+
+handler = AceStepHandler()
+```
+
+## Instance Attributes
+
+### Model Components
+
+<ResponseField name="model" type="Optional[nn.Module]">
+  The DiT (Diffusion Transformer) model instance.
+</ResponseField>
+
+<ResponseField name="vae" type="Optional[nn.Module]">
+  VAE for audio encoding/decoding.
+</ResponseField>
+
+<ResponseField name="text_encoder" type="Optional[nn.Module]">
+  Text encoder for caption/lyrics embeddings.
+</ResponseField>
+
+<ResponseField name="text_tokenizer" type="Optional[Any]">
+  Tokenizer for text inputs.
+</ResponseField>
+
+### Configuration
+
+<ResponseField name="config" type="Optional[Dict]">
+  Model configuration dictionary.
+</ResponseField>
+
+<ResponseField name="device" type="str" default="cpu">
+  Device for model inference (e.g., "cuda", "cpu", "mps").
+</ResponseField>
+
+<ResponseField name="dtype" type="torch.dtype" default="torch.float32">
+  Data type for model operations. Set based on device in `initialize_service`.
+</ResponseField>
+
+<ResponseField name="sample_rate" type="int" default="48000">
+  Audio sample rate in Hz.
+</ResponseField>
+
+### Generation State
+
+<ResponseField name="silence_latent" type="Optional[Tensor]">
+  Silence latent for initialization.
+</ResponseField>
+
+<ResponseField name="batch_size" type="int" default="2">
+  Default batch size for generation.
+</ResponseField>
+
+<ResponseField name="custom_layers_config" type="Dict[int, List[int]]">
+  Custom layers configuration for model.
+  
+  Default: `{2: [6], 3: [10, 11], 4: [3], 5: [8, 9], 6: [8]}`
+</ResponseField>
+
+### Optimization Settings
+
+<ResponseField name="offload_to_cpu" type="bool" default="False">
+  Whether to offload model components to CPU to save VRAM.
+</ResponseField>
+
+<ResponseField name="offload_dit_to_cpu" type="bool" default="False">
+  Whether to offload DiT model specifically to CPU.
+</ResponseField>
+
+<ResponseField name="compiled" type="bool" default="False">
+  Whether the model is compiled for optimization.
+</ResponseField>
+
+<ResponseField name="quantization" type="Optional[str]" default="None">
+  Quantization mode. Options: `"int8_weight_only"`, `"fp8_weight_only"`, `"w8a8_dynamic"`, or `None`.
+</ResponseField>
+
+### LoRA State
+
+<ResponseField name="lora_loaded" type="bool" default="False">
+  Whether LoRA adapters are loaded.
+</ResponseField>
+
+<ResponseField name="use_lora" type="bool" default="False">
+  Whether to use LoRA adapters during inference.
+</ResponseField>
+
+<ResponseField name="lora_scale" type="float" default="1.0">
+  LoRA influence scale (0-1), mirrors active adapter's scale.
+</ResponseField>
+
+### MLX Acceleration (macOS Apple Silicon)
+
+<ResponseField name="use_mlx_dit" type="bool" default="False">
+  Whether to use MLX acceleration for DiT model.
+</ResponseField>
+
+<ResponseField name="mlx_decoder" type="Optional[Any]" default="None">
+  MLX DiT decoder instance.
+</ResponseField>
+
+<ResponseField name="mlx_dit_compiled" type="bool" default="False">
+  Whether MLX DiT is compiled.
+</ResponseField>
+
+<ResponseField name="use_mlx_vae" type="bool" default="False">
+  Whether to use MLX acceleration for VAE.
+</ResponseField>
+
+<ResponseField name="mlx_vae" type="Optional[Any]" default="None">
+  MLX VAE instance.
+</ResponseField>
+
+### Debug and Progress
+
+<ResponseField name="disable_tqdm" type="bool">
+  Whether to disable tqdm progress bars. Auto-detected from environment.
+</ResponseField>
+
+<ResponseField name="debug_stats" type="bool">
+  Whether to enable debug statistics. Set via `ACESTEP_DEBUG_STATS` environment variable.
+</ResponseField>
+
+## Key Methods
+
+### initialize_service
+
+Initialize the ACE-Step service with model components.
+
+```python
+handler.initialize_service(
+    project_root: str,
+    config_path: str,
+    device: str = "cuda",
+    offload_to_cpu: bool = False,
+    quantization: Optional[str] = None,
+    use_mlx_dit: bool = False,
+    use_mlx_vae: bool = False,
+)
+```
+
+**Parameters:**
+
+<ParamField path="project_root" type="str" required>
+  Path to project root directory.
+</ParamField>
+
+<ParamField path="config_path" type="str" required>
+  Path or name of model config (e.g., "acestep-v15-turbo").
+</ParamField>
+
+<ParamField path="device" type="str" default="cuda">
+  Device for inference ("cuda", "cpu", "mps", "xpu", "rocm").
+</ParamField>
+
+<ParamField path="offload_to_cpu" type="bool" default="False">
+  Enable CPU offloading to save VRAM.
+</ParamField>
+
+<ParamField path="quantization" type="Optional[str]" default="None">
+  Quantization mode: "int8_weight_only", "fp8_weight_only", "w8a8_dynamic", or None.
+</ParamField>
+
+<ParamField path="use_mlx_dit" type="bool" default="False">
+  Enable MLX acceleration for DiT (macOS Apple Silicon only).
+</ParamField>
+
+<ParamField path="use_mlx_vae" type="bool" default="False">
+  Enable MLX acceleration for VAE (macOS Apple Silicon only).
+</ParamField>
+
+**Example:**
+
+```python
+from acestep.handler import AceStepHandler
+
+handler = AceStepHandler()
+handler.initialize_service(
+    project_root="/path/to/project",
+    config_path="acestep-v15-turbo",
+    device="cuda",
+    offload_to_cpu=False,
+    quantization="int8_weight_only",
+)
+```
+
+### generate_music
+
+Generate music from parameters (lower-level method).
+
+```python
+result = handler.generate_music(
+    captions: Union[str, List[str]],
+    lyrics: Optional[Union[str, List[str]]] = None,
+    bpm: Optional[int] = None,
+    key_scale: str = "",
+    time_signature: str = "",
+    vocal_language: str = "unknown",
+    inference_steps: int = 8,
+    guidance_scale: float = 7.0,
+    use_random_seed: bool = True,
+    seed: Union[str, int] = "",
+    reference_audio: Optional[str] = None,
+    audio_duration: Optional[float] = None,
+    batch_size: int = 1,
+    src_audio: Optional[str] = None,
+    audio_code_string: Union[str, List[str]] = "",
+    repainting_start: float = 0.0,
+    repainting_end: float = -1,
+    instruction: str = "",
+    audio_cover_strength: float = 1.0,
+    task_type: str = "text2music",
+    use_adg: bool = False,
+    cfg_interval_start: float = 0.0,
+    cfg_interval_end: float = 1.0,
+    shift: float = 1.0,
+    infer_method: str = "ode",
+    timesteps: Optional[List[float]] = None,
+    latent_shift: float = 0.0,
+    latent_rescale: float = 1.0,
+    chunk_mask_mode: str = "auto",
+    progress=None,
+)
+```
+
+<Tip>
+  For most use cases, use the higher-level [`generate_music`](/api/generate-music) function from `acestep.inference` instead of calling this method directly.
+</Tip>
+
+## Usage Example
+
+```python
+from acestep.handler import AceStepHandler
+from acestep.llm_inference import LLMHandler
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Initialize handler
+dit_handler = AceStepHandler()
+llm_handler = LLMHandler()
+
+# Initialize services
+dit_handler.initialize_service(
+    project_root="/path/to/project",
+    config_path="acestep-v15-turbo",
+    device="cuda",
+    offload_to_cpu=False,
+    quantization="int8_weight_only",
+)
+
+llm_handler.initialize(
+    checkpoint_dir="/path/to/checkpoints",
+    lm_model_path="acestep-5Hz-lm-0.6B",
+    backend="vllm",
+    device="cuda"
+)
+
+# Use with high-level API
+params = GenerationParams(
+    caption="upbeat electronic dance music",
+    bpm=128,
+    duration=30,
+)
+
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac",
+)
+
+result = generate_music(
+    dit_handler,
+    llm_handler,
+    params,
+    config,
+    save_dir="/output"
+)
+
+if result.success:
+    for audio in result.audios:
+        print(f"Generated: {audio['path']}")
+```
+
+## Mixin Functionality
+
+`AceStepHandler` inherits functionality from multiple mixins, organized by responsibility:
+
+### Core Generation
+- `GenerateMusicMixin`: Main generation orchestration
+- `DiffusionMixin`: Diffusion model operations
+- `ServiceGenerateMixin`: Service-level generation
+
+### Conditioning
+- `ConditioningTextMixin`: Text condition processing
+- `ConditioningEmbedMixin`: Embedding generation
+- `ConditioningMaskMixin`: Mask generation
+- `ConditioningBatchMixin`: Batch conditioning
+- `ConditioningTargetMixin`: Target condition handling
+
+### Audio Processing
+- `IoAudioMixin`: Audio I/O operations
+- `VaeEncodeMixin`, `VaeDecodeMixin`: VAE encoding/decoding
+- `VaeEncodeChunksMixin`, `VaeDecodeChunksMixin`: Chunked VAE operations
+- `AudioCodesMixin`: Audio code processing
+
+### Model Management
+- `InitServiceMixin`: Service initialization
+- `LoraManagerMixin`: LoRA adapter management
+- `MemoryUtilsMixin`: Memory optimization utilities
+
+### MLX Acceleration (macOS)
+- `MlxDitInitMixin`: MLX DiT initialization
+- `MlxVaeInitMixin`: MLX VAE initialization
+- `MlxVaeEncodeNativeMixin`, `MlxVaeDecodeNativeMixin`: MLX VAE operations
+
+### Utilities
+- `BatchPrepMixin`: Batch preparation
+- `PaddingMixin`: Padding utilities
+- `ProgressMixin`: Progress tracking
+- `MetadataMixin`: Metadata handling
+- `TaskUtilsMixin`: Task-specific utilities
+- `PromptMixin`: Prompt processing
+- `LyricScoreMixin`, `LyricTimestampMixin`: Lyrics processing
+- `TrainingPresetMixin`: Training preset handling
+
+## Environment Variables
+
+- `ACESTEP_DISABLE_TQDM`: Set to "1", "true", or "yes" to disable tqdm progress bars
+- `ACESTEP_DEBUG_STATS`: Set to "1", "true", or "yes" to enable debug statistics
+- `TOKENIZERS_PARALLELISM`: Automatically set to "false" to avoid fork warnings
+
+## See Also
+
+- [generate_music](/api/generate-music) - High-level generation function
+- [GenerationParams](/api/generation-params) - Generation parameters
+- [GenerationConfig](/api/generation-config) - Batch and output configuration
+- [GPU Compatibility Guide](/concepts/gpu-compatibility) - VRAM optimization
